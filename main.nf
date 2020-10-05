@@ -27,7 +27,7 @@ log.info """
         -------------------------------------------
          --fastq_pass       : the folder where basecalled reads are saved during a run, must contain barcodes
          --results          : where the results will go
-         --kraken_db        : 
+         --kraken_db        : path to kraken2 database
          --taxlevel         : 
          """
          .stripIndent()

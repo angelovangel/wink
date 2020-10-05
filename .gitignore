@@ -1,0 +1,6 @@
+testdata*
+results*
+.nextflow*
+work*
+
+px

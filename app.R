@@ -3,19 +3,23 @@
 #-----------------#
 # reactive read of stats and kraken output
 # nextflow pipeline has to be started separately in the same folder, i.e. the shiny app reads results-wink
+
 require(shiny)
 require(shinydashboard)
-require(shinyWidgets)
+#require(shinyWidgets)
+require(shinyFiles)
+require(shinypop)
+require(shinyjs)
 require(data.table)
 require(DT)
 require(dplyr)
 require(stringr)
-#require(prettyunits)
-require(shinyjs)
+#require(processx)
+require(sys)
 
 si_fmt <- function(x) { system2("bin/si-format.sh", x, stdout = TRUE) }
 
-ui <- dashboardPage(
+ui <- dashboardPage(title = "WINK",
 	dashboardHeader(title = "WINK - What's In my Nanopore reads, with Kraken2, in real-time", 
 									titleWidth = '100%', 
 									dropdownMenuOutput("notificationsMenu")
@@ -33,12 +37,17 @@ ui <- dashboardPage(
 	# 	)
 	# ),
 	dashboardBody(
+		
+		useShinyjs(),
+		#useShinyalert(),
+		use_notiflix_notify(position = "right-top", width = "380px"),
+		
 		tags$head(tags$style(HTML('
         .skin-blue .main-header .logo {
-          background-color: green;
+          background-color: light-blue;
         }
         .skin-blue .main-header .logo:hover {
-          background-color: green;
+          background-color: light-blue;
         }
       '))),
 		tabsetPanel(
@@ -46,9 +55,37 @@ ui <- dashboardPage(
 							 fluidRow(
 							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE, 
 							 			title = "Control panel",
-							 		actionBttn("fastq_pass_folder", "Select Run folder", style = 'minimal', color = "primary", icon = icon("folder")),
-							 		actionButton("run", "Start WINK", icon = icon("play"))
 							 		
+							 		shinyDirButton(id = "fastq_pass_folder", 
+							 									 label = "Select run folder", 
+							 									 title = "Select the fastq_pass folder",
+							 									 style = "color: #3498DB;",
+							 									 #color = "primary", 
+							 									 icon = icon("folder-open")),
+							 		actionButton("reset", "Reset", style = "color: #3498DB;", icon = icon("sync"), onclick = "history.go(0);"),
+							 		actionButton("run", "Start WINK", style = "color: #3498DB;", icon = icon("play")),
+							 		actionButton("stop", "Stop WINK", style = "color: #3498DB;", icon = icon("power-off")),
+							 		actionButton("more", "More options", style = "color: #3498DB;", icon = icon("cog"), class = "rightAlign"),
+							 		tags$div(id = "optional_inputs",
+							 						 checkboxInput("testrun", "Start test run"),
+							 						 selectizeInput("nxf_profile", 
+							 						 							 "Select nextflow profile", 
+							 						 							 width = "40%",
+							 						 							 choices = c("docker", "conda", "local"), 
+							 						 							 selected = "docker"),
+							 						 textInput("kraken_db", 
+							 						 					width = "40%",
+							 						 					"Path to kraken2 database", 
+							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"),
+							 						 
+							 						 selectizeInput("taxlevel", 
+							 						 							 "Taxonomic level for kraken2 abundance estimation", 
+							 						 							 width = "40%",
+							 						 							 choices = c("Domain" = "D", "Phylum" = "P", "Class" = "C", "Order" = "O", "Family" = "F", "Genus" = "G", "Species" = "S"), 
+							 						 							 selected = "S")
+							 						 
+							 						 ),
+							 		verbatimTextOutput("stdout")
 							 	)
 							 ),
 							 fluidRow(
@@ -71,9 +108,12 @@ ui <- dashboardPage(
 			),#---------------------------------------------------------------
 			tabPanel("Taxonomy and abundance", #-----------------------------
 							 numericInput("maxrows", "Rows to show", 25),
-							 tableOutput("rawtable"),
+							 tableOutput("ab_table"),
 							 downloadButton("downloadCsv", "Download as CSV")
 			), #---------------------------------------------------------------
+			tabPanel("Nextflow output",
+							 verbatimTextOutput("nxf_output")
+			),
 			tabPanel("Help")
 		)
 	)
@@ -82,9 +122,18 @@ ui <- dashboardPage(
 server <- function(input, output, session) {
 	
 	options(shiny.launch.browser = TRUE)
-	session$onSessionEnded(function() {
-		stopApp() # comment out on deploy
-	})
+	 session$onSessionEnded(function() {
+	 	system2("rm", args = c("-rf", "work")) # comment out on deploy
+	 })
+	
+	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
+	)
+	
+	# handling of shinyFiles
+	volumes <- c(Home = fs::path_home(), getVolumes()() )
+	shinyDirChoose(input, "fastq_pass_folder", 
+								 roots = volumes, 
+								 session = session)
 	
 	headers <- c("file", "format", "type", "num_seqs", 
 							 "sum_len", "min_len", "avg_len", "max_len", 
@@ -96,10 +145,11 @@ server <- function(input, output, session) {
 	statsFiles <- reactivePoll(
 		1000, session,
 		checkFunc = function() {
-			if( file.exists("results-wink/latest-stats") )
+			if( file.exists("results-wink/latest-stats") ) {
 				file.info("results-wink/latest-stats")$mtime
-			else
+			} else {
 				""
+				}
 		},
 		valueFunc = function() {
 			list.files("results-wink/latest-stats", pattern = "*stats.txt", full.names = TRUE)
@@ -122,11 +172,19 @@ server <- function(input, output, session) {
 				
 		}
 		)
+	pxout <- reactiveFileReader(1000, session, "px", readLines)
 
 	# reactive vals for storing total and mapped reads
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
+	stop_nxf <- reactiveValues(nxf_pid = 0)
 	
 	# OBSERVERS------------------------------------------------------------------
+	# observer for optional inputs
+	hide("optional_inputs")
+	observeEvent(input$more, {
+		shinyjs::toggle("optional_inputs")
+	})
+	
 	observe({
 		seqData$nsamples <- nrow( statsData() )
 		seqData$treads <- si_fmt( sum(statsData()$num_seqs, na.rm = TRUE) )
@@ -147,11 +205,56 @@ server <- function(input, output, session) {
 	# })
 	# 
 	
+	
 	# RENDERS ------------------------------------------------------------------
 	
-	output$rawtable <- renderTable({
-		statsData()
+	output$stdout <- renderPrint({
+		
+		# build nxf call and print to stdout
+		if (is.integer(input$fastq_pass_folder)) {
+			cat("No fastq_pass folder selected\n")
+		} else {
+			# hard set fastq folder
+		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
+		
+		nxf_args <<- c("run" ,"angelovangel/WINK",
+									 "--fastq_pass", selectedFolder)
+		cat("nextflow", nxf_args)
+		}
 	})
+	# CALLS TO NEXTFLOW PIPELINE ------------------------------------------------------------------
+	
+	
+	observeEvent(input$run, {
+		if(is.integer(input$fastq_pass_folder)) {
+			nx_notify_error("Select run folder first!")
+		} else {
+			
+			pid <- sys::exec_background("nextflow", 
+																	args = c("run", "main.nf"), 
+																	std_out = "px")
+			stop_nxf$nxf_pid <- pid
+			nx_notify_success(paste("Nextflow pipeline started with pid:", pid))
+			shinyjs::disable(id = "run")
+			writeLines("", "px")
+		}
+	})
+	# kill 
+	observeEvent(input$stop, {
+		if (stop_nxf$nxf_pid != 0) {
+		tools::pskill(stop_nxf$nxf_pid)
+		}
+	})
+	
+	
+	# ------------------------------------------------------------------
+	output$ab_table <- renderTable({
+		
+	})
+	
+	 output$nxf_output <- renderPrint({
+	 	pxout()
+	 })
 	#
 	output$stats <- renderDataTable({
 		df <- statsData() %>% 
@@ -159,24 +262,29 @@ server <- function(input, output, session) {
 										bases_human = si_fmt(bases)) %>%
 			dplyr::select(file, num_seqs, bases, bases_human, max_len, N50, Q20_perc, last_write)
 		
-			datatable(df, filter = 'top', options = list(dom = 'tp'), rownames = FALSE, class = 'hover row-border') %>%
+			datatable(df, filter = 'top',
+								extensions = 'Buttons', 
+								options = list(dom = 'Btp', 
+															 buttons = c('copy', 'csv', 'excel')
+															 ), 
+								rownames = FALSE, class = 'hover row-border') %>%
 				DT::formatStyle('num_seqs',
 												background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
 												backgroundSize = '95% 70%',
 												backgroundRepeat = 'no-repeat',
 												backgroundPosition = 'right') %>%
 				DT::formatStyle('bases',
-												background = styleColorBar(c(0, max(df$bases)), 'lightgreen'),
+												background = styleColorBar(c(0, max(df$bases)), 'skyblue'),
 												backgroundSize = '95% 70%',
 												backgroundRepeat = 'no-repeat',
 												backgroundPosition = 'right') %>%
 				DT::formatStyle('max_len',
-												background = styleColorBar(c(0, max(df$max_len)), 'lightgreen'),
+												background = styleColorBar(c(0, max(df$max_len)), 'skyblue'),
 												backgroundSize = '95% 70%',
 												backgroundRepeat = 'no-repeat',
 												backgroundPosition = 'right') %>%
 				DT::formatStyle('N50',
-												background = styleColorBar(c(0, max(df$N50)), 'lightgreen'),
+												background = styleColorBar(c(0, max(df$N50)), 'skyblue'),
 												backgroundSize = '95% 70%',
 												backgroundRepeat = 'no-repeat',
 												backgroundPosition = 'right') 
@@ -186,7 +294,7 @@ server <- function(input, output, session) {
 		valueBox(
 			value = seqData$nsamples,
 			subtitle = "Detected barcodes", 
-			color = 'blue'
+			color = 'light-blue'
 		)
 	})
 	
@@ -202,7 +310,7 @@ server <- function(input, output, session) {
 		valueBox(
 			value = seqData$tbases, 
 			subtitle = "Total bases",
-			color = 'olive'
+			color = 'light-blue'
 		)
 	})
 	
@@ -210,7 +318,7 @@ server <- function(input, output, session) {
 		valueBox(
 			value = paste( round(seqData$n50, digits = 0), "bp"), 
 			subtitle = "Mean N50",
-			color = 'green'
+			color = 'light-blue'
 		)
 	})
 	
@@ -218,59 +326,9 @@ server <- function(input, output, session) {
 		valueBox(
 			value = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" ),
 			subtitle = "Running time",
-			color = 'green'
+			color = 'light-blue'
 		)
 	})
-	# output$treads <- renderValueBox({
-	# 	readsData$total <- fileData()[1,3] %>% as.numeric()
-	# 	
-	# 	valueBox(
-	# 		value = prettyNum(readsData$total, big.mark = ","),
-	# 		subtitle = HTML("<b>Total reads</b> | <b>Step:</b> ", 
-	# 										last(fileData()$step),
-	# 										" | <b>Timestamp:</b>",
-	# 										as.character(parse_date_time(last(fileData()$time), orders = "a b! d! HMS Y")) 
-	# 		),
-	# 		icon = icon("dna")
-	# 	)
-	# })
-	# 
-	# output$abundanceTable <- renderFormattable({
-	# 	if (nrow(filteredData()) == 0)
-	# 		return()
-	# 	
-	# 	df <- filteredData() %>%
-	# 		dplyr::filter(step == max(step)) %>%
-	# 		dplyr::select(species, prob, sAligned, Abundance_m) %>%
-	# 		dplyr::mutate(Abundance_m = formattable::percent(Abundance_m)) %>%
-	# 		dplyr::arrange(desc(sAligned)) %>%
-	# 		dplyr::mutate(prob = round(prob, 2)) %>%
-	# 		# just the top 20?
-	# 		head(20)
-	# 	
-	# 	formattable(df, list(sAligned = formattable::color_bar("lightgreen"),
-	# 											 Abundance_m = formattable::color_bar("lightgreen"),
-	# 											 prob = formattable::color_bar("lightgreen")))
-	# 	
-	# })
-	# 
-	# output$abundancePlot <- renderBubbles({
-	# 	if (nrow(filteredData()) == 0)
-	# 		return()
-	# 	df <- filteredData() %>%
-	# 		dplyr::filter(step == max(step)) %>%
-	# 		dplyr::arrange(desc(Abundance_m)) %>%
-	# 		# assign colors according to prob
-	# 		dplyr::mutate(prob_color = scales::col_numeric("YlGn", domain = c(0,1))(prob)) %>%
-	# 		# just the top 20?
-	# 		head(20)
-	# 	
-	# 	bubbles(value = df$sAligned, 
-	# 					label = df$species, 
-	# 					key = df$species, 
-	# 					color = df$prob_color,
-	# 					tooltip = paste("Prob = ", df$prob, "\n", "Reads = ", df$sAligned))
-	# 	
-	# })
+	
 }
 shiny::shinyApp(ui, server)
