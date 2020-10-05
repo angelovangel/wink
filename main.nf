@@ -69,9 +69,11 @@ log.info """
     //.view()
     .set { fastq_ch }
 
-
+// use collate to determine how often kraken will be run - 
+// collate(3) at 4k reads per file = 12k reads will trigger 1 process watch execution
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
+    .collate( 10 )
     //.view()
     .set { watch_ch }
 
@@ -86,16 +88,17 @@ process touch {
 }
 
 process watch {
-    publishDir "${params.results}/latest-fastq", mode: 'copy', overwrite: true, pattern: '*.fastq'
+    publishDir "latest-fastq", mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
     publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*.txt'
     
     tag "new reads: ${x}"
-    echo true
+    //echo true
 
+    // flatten is used as it emits each file as a single item (does not wait) 
     input:
         file x from watch_ch.flatten()
     output:
-        file '*.fastq' into fastq_latest_ch
+        file '*.fastq'
         file '*stats.txt'
 
     script:
@@ -103,11 +106,12 @@ process watch {
     dir=\$(dirname \$(realpath $x))
     barcodename=\$(basename \$dir)
 
-    # to get first and last time stamps, use only these files, sorted by mtime
+    # to get first and last time stamps, use only these files, they are sorted OK by name by the ls
     # when read in R, they are POSIXct already
     get-times.sh min \$(ls -d \$dir/* | head -n 1) > firsttime.txt
     get-times.sh max \$(ls -d \$dir/* | tail -n 1) > lasttime.txt
 
+    # this is executed for each new bunch of reads, leads to blowing up the storage!
     cat \$dir/*.fastq > \$barcodename.fastq
 
     # make stats file, adding also  min and max time
@@ -116,3 +120,6 @@ process watch {
     """
 }
 
+Channel
+    .watchPath("latest-fastq/*.fastq", 'create,modify')
+    .view()

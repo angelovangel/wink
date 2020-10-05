@@ -2,5 +2,5 @@ testdata*
 results*
 .nextflow*
 work*
-
 px
+*.fastq

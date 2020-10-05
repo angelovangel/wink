@@ -6,16 +6,13 @@
 
 require(shiny)
 require(shinydashboard)
-#require(shinyWidgets)
 require(shinyFiles)
 require(shinypop)
 require(shinyjs)
 require(data.table)
 require(DT)
 require(dplyr)
-require(stringr)
-#require(processx)
-require(sys)
+require(sys) # https://github.com/jeroen/sys
 
 si_fmt <- function(x) { system2("bin/si-format.sh", x, stdout = TRUE) }
 
@@ -123,7 +120,7 @@ server <- function(input, output, session) {
 	
 	options(shiny.launch.browser = TRUE)
 	 session$onSessionEnded(function() {
-	 	system2("rm", args = c("-rf", "work")) # comment out on deploy
+	 	#system2("rm", args = c("-rf", "work")) # comment out on deploy
 	 })
 	
 	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
@@ -184,6 +181,7 @@ server <- function(input, output, session) {
 	observeEvent(input$more, {
 		shinyjs::toggle("optional_inputs")
 	})
+	shinyjs::disable("stop")
 	
 	observe({
 		seqData$nsamples <- nrow( statsData() )
@@ -192,18 +190,6 @@ server <- function(input, output, session) {
 		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE)
 		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) ) 
 	})
-	
-	# observeEvent(input$simulate, {
-	# 	shinyjs::disable("simulate")
-	# 	# system call here, so that I can use wait=F
-	# 	p <- system2("./simulateST.R", 
-	# 							 args = c("-f" ,"testdata/HMW_Zymo.tsv",
-	# 							 				 "-o", "stream.tsv",
-	# 							 				 "-s", "1"), 
-	# 							 wait = FALSE)
-	# 	
-	# })
-	# 
 	
 	
 	# RENDERS ------------------------------------------------------------------
@@ -224,25 +210,31 @@ server <- function(input, output, session) {
 	})
 	# CALLS TO NEXTFLOW PIPELINE ------------------------------------------------------------------
 	
-	
+	# start
 	observeEvent(input$run, {
 		if(is.integer(input$fastq_pass_folder)) {
 			nx_notify_error("Select run folder first!")
 		} else {
 			
 			pid <- sys::exec_background("nextflow", 
-																	args = c("run", "main.nf"), 
+																	args = c("run", "main.nf", 
+																					 "--fastq_pass", selectedFolder), 
 																	std_out = "px")
 			stop_nxf$nxf_pid <- pid
 			nx_notify_success(paste("Nextflow pipeline started with pid:", pid))
+			shinyjs::enable("stop")
 			shinyjs::disable(id = "run")
 			writeLines("", "px")
 		}
 	})
-	# kill 
+	
+	# and kill 
 	observeEvent(input$stop, {
 		if (stop_nxf$nxf_pid != 0) {
-		tools::pskill(stop_nxf$nxf_pid)
+			tools::pskill(stop_nxf$nxf_pid)
+			nx_notify_warning(paste("Nextflow pipeline with pid:", stop_nxf$nxf_pid, "was stopped!"))
+			shinyjs::enable("run")
+			shinyjs::disable("stop")
 		}
 	})
 	
