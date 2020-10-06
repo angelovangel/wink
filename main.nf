@@ -6,11 +6,6 @@ if( !nextflow.version.matches('>=19.08') ) {
     exit 1
 }
 
-// dir to store and watch merged fastq
- latestfastqdir = file("${workflow.launchDir}/fastq-latest")
- if( !latestfastqdir.exists() ) {
- latestfastqdir.mkdir()
- }
 
 /* 
  * pipeline input parameters 
@@ -67,6 +62,11 @@ log.info """
          """
          .stripIndent()
 
+// dir to store and watch merged fastq
+ latestfastqdir = file("${workflow.launchDir}/fastq-latest")
+ if( !latestfastqdir.exists() ) {
+ latestfastqdir.mkdir()
+ }
 
 // used to touch the files at start so that all available fastq files are processed 
  Channel
@@ -75,11 +75,10 @@ log.info """
     //.view()
     .set { fastq_ch }
 
-// use collate to determine how often kraken will be run - 
-// collate(3) at 4k reads per file = 12k reads will trigger 1 process watch execution
+
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
-    .collate( 10 )
+    .collate( 10 ) // how often will the process execute
     //.view()
     .set { watch_ch }
 
@@ -94,51 +93,57 @@ process touch {
 }
 
 process watch {
-    publishDir latestfastqdir, mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
-    publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*.txt'
+    //publishDir latestfastqdir, mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
+    //publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*.txt'
     
-    tag "new reads: ${x}"
+    tag "new reads detected: ${x}"
     //echo true
 
     // flatten is used as it emits each file as a single item (does not wait) 
     input:
         file x from watch_ch.flatten()
-    output:
-        file '*.fastq'
-        file '*stats.txt'
+    //output:
+        //file '*.fastq'
+        //file '*stats.txt'
 
     script:
     """
     dir=\$(dirname \$(realpath $x))
     barcodename=\$(basename \$dir)
 
-    # to get first and last time stamps, use only these files, they are sorted OK by name by the ls
-    # when read in R, they are POSIXct already
-    get-times.sh min \$(ls -d \$dir/* | head -n 1) > firsttime.txt
-    get-times.sh max \$(ls -d \$dir/* | tail -n 1) > lasttime.txt
-
-    # this is executed for each new bunch of reads, leads to blowing up the storage!
-    cat \$dir/*.fastq > \$barcodename.fastq
-
-    # make stats file, adding also  min and max time
-    seqkit stats -a \$barcodename.fastq | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > \$barcodename-stats.txt
-
+    # this is executed for each new bunch of reads, leads to blowing up the storage! 
+    # so cat directly to latestfastqdir
+    cat \$dir/*.fastq > $latestfastqdir/\$barcodename.fastq
+    
     """
 }
 
-Channel
+// use collate to determine how often kraken will be run - 
+// 
+merged_fastq_ch = Channel
     .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
-    .set {merged_fastq_ch}
+    .map { file -> tuple(file.simpleName, file) }
+    //.view()
 
-process test {
+process seqkit {
+    publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
     tag "working on: ${x}"
-    echo true
+    //echo true
 
     input:
-        file x from merged_fastq_ch.flatten() // one merged fastq file per emission
+        set filename, file(x) from merged_fastq_ch
+    output:
+        file '*stats.txt'
 
     script:
     """
-    ls -la
+    # get first and last time stamps from fastq headers
+    # when read in R, they are POSIXct already
+
+    head $x | get-times.sh min > firsttime.txt
+    tail $x | get-times.sh max > lasttime.txt
+
+    seqkit stats -a ${x} | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > ${filename}-stats.txt
+
     """ 
 }
