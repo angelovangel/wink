@@ -6,6 +6,12 @@ if( !nextflow.version.matches('>=19.08') ) {
     exit 1
 }
 
+// dir to store and watch merged fastq
+ latestfastqdir = file("${workflow.launchDir}/fastq-latest")
+ if( !latestfastqdir.exists() ) {
+ latestfastqdir.mkdir()
+ }
+
 /* 
  * pipeline input parameters 
  */
@@ -88,7 +94,7 @@ process touch {
 }
 
 process watch {
-    publishDir "latest-fastq", mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
+    publishDir latestfastqdir, mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
     publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*.txt'
     
     tag "new reads: ${x}"
@@ -121,5 +127,18 @@ process watch {
 }
 
 Channel
-    .watchPath("latest-fastq/*.fastq", 'create,modify')
-    .view()
+    .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
+    .set {merged_fastq_ch}
+
+process test {
+    tag "working on: ${x}"
+    echo true
+
+    input:
+        file x from merged_fastq_ch.flatten() // one merged fastq file per emission
+
+    script:
+    """
+    ls -la
+    """ 
+}

@@ -34,19 +34,19 @@ ui <- dashboardPage(title = "WINK",
 	# 	)
 	# ),
 	dashboardBody(
-		
+		includeCSS("custom.css"),
 		useShinyjs(),
 		#useShinyalert(),
 		use_notiflix_notify(position = "right-top", width = "380px"),
 		
-		tags$head(tags$style(HTML('
-        .skin-blue .main-header .logo {
-          background-color: light-blue;
-        }
-        .skin-blue .main-header .logo:hover {
-          background-color: light-blue;
-        }
-      '))),
+# 		tags$head(tags$style(HTML('
+#         .skin-blue .main-header .logo {
+#           background-color: light-blue;
+#         }
+#         .skin-blue .main-header .logo:hover {
+#           background-color: light-blue;
+#         }
+#       '))),
 		tabsetPanel(
 			tabPanel("Sequencing overview", #--------------------------------------------------------------
 							 fluidRow(
@@ -119,9 +119,6 @@ ui <- dashboardPage(title = "WINK",
 server <- function(input, output, session) {
 	
 	options(shiny.launch.browser = TRUE)
-	 session$onSessionEnded(function() {
-	 	#system2("rm", args = c("-rf", "work")) # comment out on deploy
-	 })
 	
 	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
 	)
@@ -169,11 +166,11 @@ server <- function(input, output, session) {
 				
 		}
 		)
-	pxout <- reactiveFileReader(1000, session, "px", readLines)
+	pxout <- reactiveFileReader(1000, session, ".pxout", readLines)
 
-	# reactive vals for storing total and mapped reads
+	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
-	stop_nxf <- reactiveValues(nxf_pid = 0)
+	nxf <- reactiveValues(pid = 0)
 	
 	# OBSERVERS------------------------------------------------------------------
 	# observer for optional inputs
@@ -219,22 +216,34 @@ server <- function(input, output, session) {
 			pid <- sys::exec_background("nextflow", 
 																	args = c("run", "main.nf", 
 																					 "--fastq_pass", selectedFolder), 
-																	std_out = "px")
-			stop_nxf$nxf_pid <- pid
+																	std_out = ".pxout")
+			nxf$pid <- pid
 			nx_notify_success(paste("Nextflow pipeline started with pid:", pid))
+			
 			shinyjs::enable("stop")
 			shinyjs::disable(id = "run")
-			writeLines("", "px")
+			shinyjs::toggleCssClass("stop", "yellow")
+			
+			shinyjs::html(selector = ".logo", 
+										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running, pid: ", 
+																 nxf$pid, "</p>")
+										)
+			
+			writeLines("", ".pxout")
+			
 		}
 	})
 	
 	# and kill 
 	observeEvent(input$stop, {
-		if (stop_nxf$nxf_pid != 0) {
-			tools::pskill(stop_nxf$nxf_pid)
-			nx_notify_warning(paste("Nextflow pipeline with pid:", stop_nxf$nxf_pid, "was stopped!"))
+		if (nxf$pid != 0) {
+			tools::pskill(nxf$pid)
+			nx_notify_warning(paste("Nextflow pipeline with pid:", nxf$pid, "was stopped!"))
 			shinyjs::enable("run")
+			shinyjs::toggleCssClass("stop", "yellow")
 			shinyjs::disable("stop")
+			shinyjs::html(selector = ".logo", 
+										html = "WINK - What's In my Nanopore reads, with Kraken2, in real-time")
 		}
 	})
 	
@@ -246,6 +255,7 @@ server <- function(input, output, session) {
 	
 	 output$nxf_output <- renderPrint({
 	 	pxout()
+	 	#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	 })
 	#
 	output$stats <- renderDataTable({
@@ -320,6 +330,10 @@ server <- function(input, output, session) {
 			subtitle = "Running time",
 			color = 'light-blue'
 		)
+	})
+	
+	session$onSessionEnded(function() {
+		#system2("rm", args = c("-rf", "work")) # comment out on deploy
 	})
 	
 }

@@ -2,6 +2,6 @@ testdata*
 results*
 .nextflow*
 work*
-px
+.pxout
 *.fastq
 .Rhistory
