@@ -78,13 +78,6 @@ log.info """
     //.view()
     .set { fastq_ch }
 
-
-Channel
-    .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
-    //.collate( 10 ) // how often will the process execute
-    //.view()
-    .set { watch_ch }
-
 // touch when program starts so that all fastq are processed
 process touch {
     input:
@@ -95,6 +88,43 @@ process touch {
     """
 }
 
+/*
+This is the key to the whole pipeline - 
+/fastq_pass/barcode01/PAE58908_pass_barcode01_d2c5c063_2.fastq
+/fastq_pass/barcode01/PAE58908_pass_barcode01_d2c5c063_0.fastq
+*/
+Channel
+    .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
+    .map { file ->
+        //def key = file.name.toString().tokenize('_').get(2)
+        def key = file.getParent()
+        return key
+     }
+    .distinct()
+    //.view()
+    .set { watch_ch }
+
+process watch {
+    //nothing to publish, this ends here
+    tag "new reads detected: ${x}"
+
+    // flatten is used as it emits each file as a single item (does not wait), try collate here?
+    input:
+        path x from watch_ch
+
+    script:
+    """
+    dir=\$(dirname \$(realpath $x))
+    barcodename=\$(basename \$dir)
+
+    # this is executed for each new bunch of reads, leads to blowing up the storage! 
+    # so cat directly to latestfastqdir
+    cat ${x}/*.fastq > $latestfastqdir/${x}.fastq
+
+    """
+}
+
+/*
 process watch {
     //nothing to publish, this ends here
     tag "new reads detected: ${x}"
@@ -114,13 +144,15 @@ process watch {
 
     """
 }
-
-// use collate to determine how often kraken will be run - 
-// 
+*/
+ 
+/*
 Channel
     .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
     .map { file -> tuple(file.simpleName, file) }
     .into { merged_fastq_ch1; merged_fastq_ch2 }
+
+merged_fastq_ch1.view()
 
 process seqkit {
     publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
@@ -203,3 +235,4 @@ process kraken2 {
         """
 
 }
+*/
