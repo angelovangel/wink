@@ -173,21 +173,16 @@ kraken_channel = merged_fastq_ch2.combine(kraken_db_ch) //list with 3 elements
 process kraken2 {
     container 'aangeloo/kraken2:latest'
     tag "working on: ${sample_id}"
-    //echo true
     publishDir "${params.results}/samples", mode: 'copy', overwrite: true, pattern: '*.{report,tsv}'
     
     input:
-        //path db from kraken_db_ch
         tuple sample_id, file(x), file(y) from kraken_channel
     
     output:
-        file("*report") into kraken2mqc_ch // both kraken2 and the bracken-corrected reports are published and later used in pavian?
+        file("*report") // both kraken2 and the bracken-corrected reports are published and later used in pavian?
         tuple sample_id, file("*bracken.tsv") into bracken2dt_ch
-        file("*bracken.tsv") into bracken2summary_ch
     
     script:
-    //def single = x instanceof Path
-    //def kraken_input = single ? "\"${ x }\"" : "--paired \"${ x[0] }\"  \"${ x[1] }\""
     def memory = params.weakmem ? "--memory-mapping" : ""  // use --memory-mapping to avoid loading db in ram on weak systems
     def rlength = 250
     
@@ -195,14 +190,14 @@ process kraken2 {
         kraken2 \
             -db $y \
             $memory \
-            --report ${sample_id}_kraken2.report \
+            --report ${sample_id}_k2.report \
             ${x} \
             > kraken2.output
 
         bracken \
             -d $y \
             -r $rlength \
-            -i ${sample_id}_kraken2.report \
+            -i ${sample_id}_k2.report \
             -l ${params.taxlevel} \
             -o ${sample_id}_bracken.tsv
         """
