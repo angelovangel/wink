@@ -12,7 +12,8 @@ if( !nextflow.version.matches('>=19.08') ) {
  */
  params.fastq_pass = "fastq_pass"
  params.results = "${workflow.launchDir}/results-wink"
- params.kraken_db = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"
+ params.kraken_gz = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"
+ params.kraken_store = "$HOME/db/kraken"
  params.weakmem = false
  params.taxlevel = "S" //level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
  params.help = false
@@ -28,8 +29,9 @@ log.info """
         -------------------------------------------
          --fastq_pass       : the folder where basecalled reads are saved during a run, must contain barcodes
          --results          : where the results will go
-         --kraken_db        : path to kraken2 database
-         --taxlevel         : 
+         --kraken_gz        : path to kraken2 database, as tgz file (ftp or absolute path)
+         --kraken_store     : path to permanently store the kraken2 database, will be used in subsequent runs
+         --taxlevel         : taxonomic level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
          """
          .stripIndent()
 }
@@ -49,7 +51,8 @@ log.info """
         -------------------------------------------
          --fastq_pass       : ${params.fastq_pass}
          --results          : ${params.results}
-         --kraken_db        : ${params.kraken_db}
+         --kraken_gz        : ${params.kraken_gz}
+         --kraken_store     : ${params.kraken_store}
          --taxlevel         : ${params.taxlevel}
 
          Runtime data:
@@ -78,7 +81,7 @@ log.info """
 
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
-    .collate( 10 ) // how often will the process execute
+    //.collate( 10 ) // how often will the process execute
     //.view()
     .set { watch_ch }
 
@@ -93,18 +96,12 @@ process touch {
 }
 
 process watch {
-    //publishDir latestfastqdir, mode: 'move', overwrite: true, pattern: '*.fastq' // move instead of copy, but this terminates here
-    //publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*.txt'
-    
+    //nothing to publish, this ends here
     tag "new reads detected: ${x}"
-    //echo true
 
-    // flatten is used as it emits each file as a single item (does not wait) 
+    // flatten is used as it emits each file as a single item (does not wait), try collate here?
     input:
         file x from watch_ch.flatten()
-    //output:
-        //file '*.fastq'
-        //file '*stats.txt'
 
     script:
     """
@@ -114,16 +111,16 @@ process watch {
     # this is executed for each new bunch of reads, leads to blowing up the storage! 
     # so cat directly to latestfastqdir
     cat \$dir/*.fastq > $latestfastqdir/\$barcodename.fastq
-    
+
     """
 }
 
 // use collate to determine how often kraken will be run - 
 // 
-merged_fastq_ch = Channel
+Channel
     .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
     .map { file -> tuple(file.simpleName, file) }
-    //.view()
+    .into { merged_fastq_ch1; merged_fastq_ch2 }
 
 process seqkit {
     publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
@@ -131,7 +128,7 @@ process seqkit {
     //echo true
 
     input:
-        set filename, file(x) from merged_fastq_ch
+        tuple filename, file(x) from merged_fastq_ch1
     output:
         file '*stats.txt'
 
@@ -146,4 +143,68 @@ process seqkit {
     seqkit stats -a ${x} | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > ${filename}-stats.txt
 
     """ 
+}
+
+if(params.kraken_gz){
+    Channel
+        .of( "${params.kraken_gz}" )
+        .set { kraken_gz_ch }
+} else {
+        kraken_gz_ch = Channel.empty()
+}
+
+process krakenDB {
+    storeDir "${params.kraken_store}"
+
+input:
+    path kraken_file from kraken_gz_ch
+
+output:
+    path "**", type: 'dir' into kraken_db_ch
+
+script:
+"""
+tar -xf $kraken_file
+"""
+}
+
+kraken_channel = merged_fastq_ch2.combine(kraken_db_ch) //list with 3 elements
+
+process kraken2 {
+    container 'aangeloo/kraken2:latest'
+    tag "working on: ${sample_id}"
+    //echo true
+    publishDir "${params.results}/samples", mode: 'copy', overwrite: true, pattern: '*.{report,tsv}'
+    
+    input:
+        //path db from kraken_db_ch
+        tuple sample_id, file(x), file(y) from kraken_channel
+    
+    output:
+        file("*report") into kraken2mqc_ch // both kraken2 and the bracken-corrected reports are published and later used in pavian?
+        tuple sample_id, file("*bracken.tsv") into bracken2dt_ch
+        file("*bracken.tsv") into bracken2summary_ch
+    
+    script:
+    //def single = x instanceof Path
+    //def kraken_input = single ? "\"${ x }\"" : "--paired \"${ x[0] }\"  \"${ x[1] }\""
+    def memory = params.weakmem ? "--memory-mapping" : ""  // use --memory-mapping to avoid loading db in ram on weak systems
+    def rlength = 250
+    
+        """
+        kraken2 \
+            -db $y \
+            $memory \
+            --report ${sample_id}_kraken2.report \
+            ${x} \
+            > kraken2.output
+
+        bracken \
+            -d $y \
+            -r $rlength \
+            -i ${sample_id}_kraken2.report \
+            -l ${params.taxlevel} \
+            -o ${sample_id}_bracken.tsv
+        """
+
 }
