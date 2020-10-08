@@ -90,8 +90,6 @@ process touch {
 
 /*
 This is the key to the whole pipeline - 
-/fastq_pass/barcode01/PAE58908_pass_barcode01_d2c5c063_2.fastq
-/fastq_pass/barcode01/PAE58908_pass_barcode01_d2c5c063_0.fastq
 */
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
@@ -106,11 +104,14 @@ Channel
 
 process watch {
     //nothing to publish, this ends here
+    publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
     tag "new reads detected: ${x}"
 
     // flatten is used as it emits each file as a single item (does not wait), try collate here?
     input:
         path x from watch_ch
+    output:
+        file '*stats.txt'
 
     script:
     """
@@ -121,61 +122,23 @@ process watch {
     # so cat directly to latestfastqdir
     cat ${x}/*.fastq > $latestfastqdir/${x}.fastq
 
-    """
-}
+    # do this in the same process, otherwise comes to file blocking from cat and clashes
+    head $latestfastqdir/${x}.fastq | get-times.sh min > firsttime.txt
+    tail $latestfastqdir/${x}.fastq | get-times.sh max > lasttime.txt
 
-/*
-process watch {
-    //nothing to publish, this ends here
-    tag "new reads detected: ${x}"
+    seqkit stats -a $latestfastqdir/${x}.fastq | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > ${x}-stats.txt
 
-    // flatten is used as it emits each file as a single item (does not wait), try collate here?
-    input:
-        file x from watch_ch.flatten()
-
-    script:
-    """
-    dir=\$(dirname \$(realpath $x))
-    barcodename=\$(basename \$dir)
-
-    # this is executed for each new bunch of reads, leads to blowing up the storage! 
-    # so cat directly to latestfastqdir
-    cat \$dir/*.fastq > $latestfastqdir/\$barcodename.fastq
 
     """
 }
-*/
  
-/*
+
 Channel
     .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
     .map { file -> tuple(file.simpleName, file) }
-    .into { merged_fastq_ch1; merged_fastq_ch2 }
+    .set { merged_fastq_ch }
 
-merged_fastq_ch1.view()
-
-process seqkit {
-    publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
-    tag "working on: ${x}"
-    //echo true
-
-    input:
-        tuple filename, file(x) from merged_fastq_ch1
-    output:
-        file '*stats.txt'
-
-    script:
-    """
-    # get first and last time stamps from fastq headers
-    # when read in R, they are POSIXct already
-
-    head $x | get-times.sh min > firsttime.txt
-    tail $x | get-times.sh max > lasttime.txt
-
-    seqkit stats -a ${x} | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > ${filename}-stats.txt
-
-    """ 
-}
+//merged_fastq_ch1.view()
 
 if(params.kraken_gz){
     Channel
@@ -190,7 +153,6 @@ process krakenDB {
 
 input:
     path kraken_file from kraken_gz_ch
-
 output:
     path "**", type: 'dir' into kraken_db_ch
 
@@ -200,9 +162,9 @@ tar -xf $kraken_file
 """
 }
 
-kraken_channel = merged_fastq_ch2.combine(kraken_db_ch) //list with 3 elements
+kraken_channel = merged_fastq_ch.combine(kraken_db_ch) //list with 3 elements
 
-process kraken2 {
+process kraken {
     container 'aangeloo/kraken2:latest'
     tag "working on: ${sample_id}"
     publishDir "${params.results}/samples", mode: 'copy', overwrite: true, pattern: '*.{report,tsv}'
@@ -235,4 +197,3 @@ process kraken2 {
         """
 
 }
-*/

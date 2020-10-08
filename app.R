@@ -70,9 +70,9 @@ ui <- dashboardPage(title = "WINK",
 							 						 							 width = "40%",
 							 						 							 choices = c("docker", "conda", "local"), 
 							 						 							 selected = "docker"),
-							 						 textInput("kraken_db", 
+							 						 textInput("kraken_gz", 
 							 						 					width = "40%",
-							 						 					"Path to kraken2 database", 
+							 						 					"Path to kraken2 database (gz file)", 
 							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"),
 							 						 
 							 						 selectizeInput("taxlevel", 
@@ -200,8 +200,10 @@ server <- function(input, output, session) {
 			# hard set fastq folder
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
 		
-		nxf_args <<- c("run" ,"angelovangel/WINK",
-									 "--fastq_pass", selectedFolder)
+		nxf_args <<- c("run" ,
+									 "main.nf",
+									 "--fastq_pass", selectedFolder, 
+									 "--kraken_gz", input$kraken_gz)
 		cat("nextflow", nxf_args)
 		}
 	})
@@ -214,8 +216,7 @@ server <- function(input, output, session) {
 		} else {
 			
 			pid <- sys::exec_background("nextflow", 
-																	args = c("run", "main.nf", 
-																					 "--fastq_pass", selectedFolder), 
+																	args = nxf_args, 
 																	std_out = ".pxout")
 			nxf$pid <- pid
 			nx_notify_success(paste("Nextflow pipeline started with pid:", pid))
