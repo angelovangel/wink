@@ -89,6 +89,7 @@ process touch {
 /*
 This is the key to the whole pipeline - 
 */
+// 
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
     .map { file ->
@@ -98,7 +99,7 @@ Channel
      }
     .distinct()
     //.view()
-    .set { watch_ch }
+    .set { watch_fastq_pass }
 
 process watch {
     //nothing to publish, this ends here
@@ -107,15 +108,12 @@ process watch {
 
     // flatten is used as it emits each file as a single item (does not wait), try collate here?
     input:
-        path x from watch_ch
+        path x from watch_fastq_pass
     output:
         file '*stats.txt'
 
     script:
     """
-    dir=\$(dirname \$(realpath $x))
-    barcodename=\$(basename \$dir)
-
     # this is executed for each new bunch of reads, leads to blowing up the storage! 
     # so cat directly to latestfastqdir
 
@@ -132,14 +130,7 @@ process watch {
 
     """
 }
- 
 
-Channel
-    .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
-    .map { file -> tuple(file.simpleName, file) }
-    .set { merged_fastq_ch }
-
-//merged_fastq_ch1.view()
 
 if(params.kraken_gz){
     Channel
@@ -163,19 +154,35 @@ tar -xf $kraken_file
 """
 }
 
-kraken_channel = merged_fastq_ch.combine(kraken_db_ch) //list with 3 elements
+Channel
+    .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
+    .map { file ->
+        def key = file.getParent().getFileName()//get parent folder name, i.e. barcode01
+        def filename = file.simpleName
+        return tuple(key, filename, file)
+     }
+    .set { watch_fastq_pass_2 }
+
+Channel
+    .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
+    .map { file -> tuple(file.simpleName, file) }
+    .set { merged_fastq_ch }
+
+// this is now barcode, filename, file, krakendb
+kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)
+//kraken_ch_2.view()
 
 process kraken {
     container 'aangeloo/kraken2:latest'
-    tag "working on: ${sample_id}"
-    publishDir "${params.results}/samples", mode: 'copy', overwrite: true, pattern: '*.{report,tsv}'
+    tag "working on: ${filename} from ${key}"
+    publishDir "${params.results}/scratch-kraken", mode: 'copy', pattern: '*.tsv'
     
     input:
-        tuple sample_id, file(x), file(y) from kraken_channel
+        tuple key, filename, file(fastq), file(db) from kraken_ch_2
     
     output:
-        file("*report") // both kraken2 and the bracken-corrected reports are published and later used in pavian?
-        tuple sample_id, file("*bracken.tsv") into bracken2dt_ch
+        //file("*report") // both kraken2 and the bracken-corrected reports are published and later used in pavian?
+        file("*bracken.tsv")
     
     script:
     def memory = params.weakmem ? "--memory-mapping" : ""  // use --memory-mapping to avoid loading db in ram on weak systems
@@ -183,18 +190,18 @@ process kraken {
     
         """
         kraken2 \
-            -db $y \
+            -db $db \
             $memory \
-            --report ${sample_id}_k2.report \
-            ${x} \
+            --report ${filename}_k2.report \
+            ${fastq} \
             > kraken2.output
 
         bracken \
-            -d $y \
+            -d $db \
             -r $rlength \
-            -i ${sample_id}_k2.report \
+            -i ${filename}_k2.report \
             -l ${params.taxlevel} \
-            -o ${sample_id}_bracken.tsv
+            -o ${filename}_bracken.tsv
         """
 
 }
