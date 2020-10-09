@@ -118,13 +118,16 @@ process watch {
 
     # this is executed for each new bunch of reads, leads to blowing up the storage! 
     # so cat directly to latestfastqdir
+
     cat ${x}/*.fastq > $latestfastqdir/${x}.fastq
 
     # do this in the same process, otherwise comes to file blocking from cat and clashes
     head $latestfastqdir/${x}.fastq | get-times.sh min > firsttime.txt
     tail $latestfastqdir/${x}.fastq | get-times.sh max > lasttime.txt
 
-    seqkit stats -a $latestfastqdir/${x}.fastq | sed '/^file/d' | tr -d ',' | paste -d " " - firsttime.txt lasttime.txt > ${x}-stats.txt
+    seqkit stats -a $latestfastqdir/${x}.fastq | \
+    sed '/^file/d' | tr -d ',' | \
+    paste -d " " - firsttime.txt lasttime.txt > ${x}-stats.txt
 
 
     """
