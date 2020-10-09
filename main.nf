@@ -75,10 +75,8 @@ log.info """
  Channel
     .fromPath( "${params.fastq_pass}/**.fastq", type: 'file')
     //.ifEmpty { error "Can not find any barcode* folders in ${params.fastq_pass}" }
-    //.view()
     .set { fastq_ch }
 
-// touch when program starts so that all fastq are processed
 process touch {
     input:
         file x from fastq_ch.collect()
