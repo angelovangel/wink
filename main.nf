@@ -65,10 +65,14 @@ log.info """
          """
          .stripIndent()
 
-// dir to store and watch merged fastq
- latestfastqdir = file("${workflow.launchDir}/fastq-latest")
+// dir to store and watch merged fastq and scratch for intermediate bracken results
+ latestfastqdir = file("${params.results}/latest-fastq")
  if( !latestfastqdir.exists() ) {
- latestfastqdir.mkdir()
+ latestfastqdir.mkdirs() // attention - mkdir() vs mkdirs(), the latter creates parents if they do not exist
+ }
+ scratchdir = file("${params.results}/scratch")
+ if( !scratchdir.exists() ) {
+ scratchdir.mkdirs()
  }
 
 // used to touch the files at start so that all available fastq files are processed 
@@ -162,11 +166,12 @@ Channel
         return tuple(key, filename, file)
      }
     .set { watch_fastq_pass_2 }
-
+/*
 Channel
     .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
     .map { file -> tuple(file.simpleName, file) }
     .set { merged_fastq_ch }
+*/
 
 // this is now barcode, filename, file, krakendb
 kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)
@@ -174,8 +179,8 @@ kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)
 
 process kraken {
     container 'aangeloo/kraken2:latest'
-    tag "working on: ${filename} from ${key}"
-    publishDir "${params.results}/scratch-kraken", mode: 'copy', pattern: '*.tsv'
+    tag "working on: ${filename}; barcode: ${key}"
+    publishDir "${scratchdir}/${key}", mode: 'copy', pattern: '*.tsv'
     
     input:
         tuple key, filename, file(fastq), file(db) from kraken_ch_2
@@ -203,5 +208,33 @@ process kraken {
             -l ${params.taxlevel} \
             -o ${filename}_bracken.tsv
         """
+
+}
+
+
+Channel
+    .watchPath("${scratchdir}/**.tsv", 'create,modify')
+    .map { file -> 
+            def barcode = file.getParent().getFileName()
+            def barcodedir = file.getParent()
+            return tuple(barcode, barcodedir)
+     }
+    .set { combine_ch }
+//combine_ch.view()
+
+process combine {
+    tag "working on: ${barcode}"
+    publishDir "${params.results}/latest-bracken", mode: 'copy', pattern: '*tsv'
+
+    input:
+        tuple barcode, path(barcodedir) from combine_ch
+    output:
+        file '*.tsv'
+    
+    script:
+    
+    """
+    bracken-combine.R ${barcodedir} ${barcode}-bracken.tsv
+    """
 
 }
