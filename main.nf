@@ -75,6 +75,7 @@ log.info """
  scratchdir.mkdirs()
  }
 
+
 // used to touch the files at start so that all available fastq files are processed 
  Channel
     .fromPath( "${params.fastq_pass}/**.fastq", type: 'file')
@@ -90,9 +91,9 @@ process touch {
     """
 }
 
-/*
-This is the key to the whole pipeline - 
-*/
+//
+//This is the key to the whole pipeline - 
+
 // 
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
@@ -166,12 +167,6 @@ Channel
         return tuple(key, filename, file)
      }
     .set { watch_fastq_pass_2 }
-/*
-Channel
-    .watchPath("${latestfastqdir}/*.fastq", 'create,modify')
-    .map { file -> tuple(file.simpleName, file) }
-    .set { merged_fastq_ch }
-*/
 
 // this is now barcode, filename, file, krakendb
 kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)

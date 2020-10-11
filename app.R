@@ -96,17 +96,26 @@ ui <- dashboardPage(title = "WINK",
 								)
 							 ),
 							 fluidRow(
-							 	box(
-							 		width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = TRUE,
-							 		title = "Run statistics per sample",
-							 		DT::dataTableOutput("stats", width = "100%", height = 500)
+							 	box(width = 12, 
+							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
+							 			title = "Run statistics per sample",
+							 			DT::dataTableOutput("stats", width = "100%", height = 500)
 							 	)
 							 )
 			),#---------------------------------------------------------------
 			tabPanel("Taxonomy and abundance", #-----------------------------
-							 numericInput("maxrows", "Rows to show", 25),
-							 tableOutput("ab_table"),
-							 downloadButton("downloadCsv", "Download as CSV")
+							 fluidRow(
+							 	box(width = 6, 
+							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
+							 			title = "Bracken results per sample",
+							 			numericInput("topn", "Top n species to show", value = 3, min = 1, max = 5),
+							 			DT::dataTableOutput("ab_table", width = "100%", height = 500)
+							 			),
+							 	box(width = 6,
+							 			status = "warning", solidHeader = FALSE, collapsible = TRUE, collapsed = FALSE,
+							 			title = "Detailed bracken results",
+							 			DT::dataTableOutput("ab_table_detail", width = "100%", height = 500))
+							 )
 			), #---------------------------------------------------------------
 			tabPanel("Nextflow output",
 							 verbatimTextOutput("nxf_output")
@@ -143,7 +152,7 @@ server <- function(input, output, session) {
 				file.info("results-wink/latest-stats")$mtime
 			} else {
 				""
-				}
+			}
 		},
 		valueFunc = function() {
 			list.files("results-wink/latest-stats", pattern = "*stats.txt", full.names = TRUE)
@@ -166,6 +175,39 @@ server <- function(input, output, session) {
 				
 		}
 		)
+	brackenFiles <- reactivePoll(
+		1000, session, 
+		checkFunc = function() {
+			if( file.exists("results-wink/latest-bracken") ) {
+				file.info("results-wink/latest-bracken")$mtime
+			} else {
+				""
+			}
+			}, 
+		valueFunc = function() {
+			l <- list.files("results-wink/latest-bracken", pattern = "*.tsv", full.names = TRUE)
+			setNames(l, basename(l)) # also returns l
+		}
+	)
+	
+	brackenData <- reactivePoll(
+		1000, session,
+		checkFunc = function() {
+			if ( any( file.exists(brackenFiles()) ) ) 
+				file.info( brackenFiles() )$mtime
+			else
+				""
+			}, 
+		valueFunc =  function(){
+			if ( any(file.exists(brackenFiles() )) ) {
+				
+				rbindlist( lapply(brackenFiles(), fread), idcol = "file" )
+			} else {
+				brackenColNames <- c("file", "name", "taxonomy_id", "new_est_reads", "freq")
+				setNames(data.frame(matrix(ncol = 5, nrow = 0, 0)), brackenColNames)
+			}
+		})
+	
 	pxout <- reactiveFileReader(1000, session, ".pxout", readLines)
 
 	# reactive vals for storing total, mapped reads, nxf process info...
@@ -259,11 +301,12 @@ server <- function(input, output, session) {
 	 	#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	 })
 	#
-	output$stats <- renderDataTable({
+	output$stats <- DT::renderDataTable({
 		df <- statsData() %>% 
-			dplyr::mutate(bases = sum_len,
-										bases_human = si_fmt(bases)) %>%
-			dplyr::select(file, num_seqs, bases, bases_human, max_len, N50, Q20_perc, last_write)
+			dplyr::mutate(file = basename(tools::file_path_sans_ext(file)),
+										bases = sum_len,
+										bases_h = si_fmt(bases)) %>%
+			dplyr::select(file, num_seqs, bases, bases_h, max_len, N50, Q20_perc, last_write)
 		
 			datatable(df, filter = 'top',
 								extensions = 'Buttons', 
@@ -331,6 +374,46 @@ server <- function(input, output, session) {
 			subtitle = "Running time",
 			color = 'light-blue'
 		)
+	})
+	
+	output$ab_table <- DT::renderDataTable({
+		df <- brackenData() %>% 
+			mutate(freq = round(freq, 3)) %>%
+			group_by(file) %>%
+			slice_head(n = input$topn) %>%
+			summarize_at( c("name","freq"), .funs = "paste", collapse = " | " )
+		
+		DT::datatable(df, 
+									selection = "single",
+									caption = "Top 3 kraken-assigned species per sample (click on a row for more info)",
+									filter = 'top',
+									extensions = 'Buttons', 
+									options = list(dom = 'Btp', 
+																 buttons = c('copy', 'csv', 'excel')
+									), 
+									rownames = FALSE, class = 'hover row-border')
+	})
+	
+	output$ab_table_detail <- DT::renderDataTable({
+		# reproduce ab_table
+		df1 <- brackenData() %>% 
+			group_by(file) %>%
+			mutate(freq = round(freq, 3)) %>%
+			slice_head(n = input$topn) %>%
+			summarize_at( c("name", "new_est_reads","freq"), .funs = "paste", collapse = " | " )
+		
+		rowselected <- df1$file[ input$ab_table_rows_selected ]
+		df2 <- brackenData()[file %in% rowselected, ]
+		
+		DT::datatable(df2, 
+									selection = "single",
+									caption = "Detailed bracken abundance table for ...",
+									filter = 'top',
+									extensions = 'Buttons', 
+									options = list(dom = 'Btp', 
+																 buttons = c('copy', 'csv', 'excel')
+									), 
+									rownames = FALSE, class = 'hover row-border')
 	})
 	
 	session$onSessionEnded(function() {
