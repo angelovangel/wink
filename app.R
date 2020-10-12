@@ -215,6 +215,17 @@ server <- function(input, output, session) {
 			}
 		})
 	
+	# this is the summary table, one row per barcode
+	brackenDataLeft <- reactive({
+		brackenData() %>% 
+		dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
+		mutate(freq = round(freq, 3)) %>%
+		group_by(file) %>%
+		slice_head(n = input$topn) %>%
+		summarize_at( c("name"), .funs = "paste", collapse = " | " )
+	})
+	
+	
 	pxout <- reactiveFileReader(1000, session, ".pxout", readLines)
 
 	# reactive vals for storing total, mapped reads, nxf process info...
@@ -384,15 +395,26 @@ server <- function(input, output, session) {
 		)
 	})
 	
-	output$ab_table <- DT::renderDataTable({
-		df <- brackenData() %>% 
-			mutate(freq = round(freq, 3)) %>%
-			group_by(file) %>%
-			slice_head(n = input$topn) %>%
-			summarize_at( c("name"), .funs = "paste", collapse = " | " )
+	#------------------------------------------------
+	# retain selected row in a temp reactive variable to enable persistent selection
+	# without this, the row is de-selected after each referesh of the table
+	last_selection <- reactiveValues(row_value = NULL)
+	
+	# store the values each time a row is selected
+	observeEvent(input$ab_table_rows_selected,{ 
 		
-		DT::datatable(df, 
-									selection = "single",
+		last_selection$row_value = brackenDataLeft()$file[input$ab_table_rows_selected]
+		print(last_selection$row_value)
+	})
+	
+	#------------------------------------------------
+	output$ab_table <- DT::renderDataTable({
+		
+		# which is the number of the previous row now?
+		newselection <- which(brackenDataLeft()$file %in% last_selection$row_value)
+		
+		DT::datatable(brackenDataLeft(), 
+									selection = list(mode = "single", selected = newselection), #keep persistant row selection!
 									caption = HTML(paste("Top" ,tags$b(input$topn), "kraken-assigned species per sample (click on a row for more info)")),
 									#filter = 'top',
 									extensions = 'Buttons', 
@@ -403,20 +425,23 @@ server <- function(input, output, session) {
 	})
 	
 	output$ab_table_detail <- DT::renderDataTable({
-		# reproduce ab_table to match selected rows
-		df1 <- brackenData() %>% 
-			group_by(file) %>%
-			slice_head(n = input$topn) %>%
-			summarize_at( c("name", "new_est_reads","freq"), .funs = "paste", collapse = " | " )
+		# validate ab_table is not empty
+		validate(
+			need(
+				nrow( brackenData() ) != 0, "No data here"
+			)
+		)
 		
-		rowselected <- df1$file[ input$ab_table_rows_selected ]
-		df2 <- brackenData()[file %in% rowselected, ] %>% 
+		# use the row value reactive to filter
+		df2 <- brackenData()[file %in% last_selection$row_value, ] %>% 
+			
+			dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
 			dplyr::mutate(kraken_reads = kraken_assigned_reads,bracken_corr_reads = new_est_reads, freq = round(freq*100, 2)) %>% 
 			dplyr::select(name, taxonomy_id, kraken_reads, bracken_corr_reads, freq) %>%
 			dplyr::filter(freq >= input$filterFreq)
 		
-		caption <- if_else(length(rowselected) == 0, "Select a sample from the table on the left", 
-											 paste("Bracken abundance table for", tags$b(rowselected)))
+		caption <- if_else(is.na(last_selection$row_value), "Select a sample from the table on the left", 
+											 paste("Bracken abundance table for", tags$b(last_selection$row_value)))
 		DT::datatable(df2, 
 									selection = "single",
 									caption = HTML(caption),
@@ -433,12 +458,12 @@ server <- function(input, output, session) {
 										backgroundRepeat = 'no-repeat',
 										backgroundPosition = 'right') %>%
 		DT::formatStyle('bracken_corr_reads',
-											background = styleColorBar(c(0,max(df2$bracken_corr_reads)), 'skyblue'),
+											background = styleColorBar(c(0, max(df2$bracken_corr_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right') %>%
 		DT::formatStyle('kraken_reads',
-											background = styleColorBar(c(0,max(df2$kraken_reads)), 'skyblue'),
+											background = styleColorBar(c(0,max(df2$kraken_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right')
