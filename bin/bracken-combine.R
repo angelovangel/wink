@@ -13,7 +13,7 @@ dfs <- lapply(files, fread)
 
 bind_rows(dfs) %>% 
 	group_by(name, taxonomy_id) %>% 
-	summarise_at("new_est_reads", sum) %>% 
-	ungroup() %>% mutate(freq = new_est_reads/sum(new_est_reads)) %>% 
+	summarise_at(c("kraken_assigned_reads", "new_est_reads"), sum, na.rm = TRUE) %>% 
+	ungroup() %>% mutate(freq = new_est_reads/sum(new_est_reads, na.rm = TRUE)) %>% 
 	arrange(desc(new_est_reads)) %>%
 	fwrite(file = arg[2], sep = "\t")

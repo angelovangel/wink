@@ -9,6 +9,7 @@ require(shinydashboard)
 require(shinyFiles)
 require(shinypop)
 require(shinyjs)
+require(shinyWidgets)
 require(data.table)
 require(DT)
 require(dplyr)
@@ -107,13 +108,19 @@ ui <- dashboardPage(title = "WINK",
 							 fluidRow(
 							 	box(width = 6, 
 							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
-							 			title = "Bracken results per sample",
-							 			numericInput("topn", "Top n species to show", value = 3, min = 1, max = 5),
+							 			title = "Bracken results per sample", 
+							 			sliderInput("topn", "Top N species to show", value = 3, min = 1, max = 5, step = 1),
 							 			DT::dataTableOutput("ab_table", width = "100%", height = 500)
 							 			),
 							 	box(width = 6,
 							 			status = "warning", solidHeader = FALSE, collapsible = TRUE, collapsed = FALSE,
 							 			title = "Detailed bracken results",
+							 			shinyWidgets::sliderTextInput("filterFreq", 
+							 																		"Filter by abundance", 
+							 																		choices = c(0, 0.1, 1, 5, 10, 20), 
+							 																		selected = 0,
+							 																		post = "%", grid = TRUE),
+							 			#sliderInput("filterFreq", "Filter by abundance", min = 0, max = 1, value = 0, step = 0.1),
 							 			DT::dataTableOutput("ab_table_detail", width = "100%", height = 500))
 							 )
 			), #---------------------------------------------------------------
@@ -203,8 +210,8 @@ server <- function(input, output, session) {
 				
 				rbindlist( lapply(brackenFiles(), fread), idcol = "file" )
 			} else {
-				brackenColNames <- c("file", "name", "taxonomy_id", "new_est_reads", "freq")
-				setNames(data.frame(matrix(ncol = 5, nrow = 0, 0)), brackenColNames)
+				brackenColNames <- c("file", "name", "taxonomy_id", "kraken_assigned_reads", "new_est_reads", "freq")
+				setNames(data.frame(matrix(ncol = 6, nrow = 0, 0)), brackenColNames)
 			}
 		})
 	
@@ -212,6 +219,7 @@ server <- function(input, output, session) {
 
 	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
+	krakenData <- reactiveValues(reads = 0, assigned_reads = 0, unassigned_reads = 0)
 	nxf <- reactiveValues(pid = 0)
 	
 	# OBSERVERS------------------------------------------------------------------
@@ -381,12 +389,12 @@ server <- function(input, output, session) {
 			mutate(freq = round(freq, 3)) %>%
 			group_by(file) %>%
 			slice_head(n = input$topn) %>%
-			summarize_at( c("name","freq"), .funs = "paste", collapse = " | " )
+			summarize_at( c("name"), .funs = "paste", collapse = " | " )
 		
 		DT::datatable(df, 
 									selection = "single",
-									caption = "Top 3 kraken-assigned species per sample (click on a row for more info)",
-									filter = 'top',
+									caption = HTML(paste("Top" ,tags$b(input$topn), "kraken-assigned species per sample (click on a row for more info)")),
+									#filter = 'top',
 									extensions = 'Buttons', 
 									options = list(dom = 'Btp', 
 																 buttons = c('copy', 'csv', 'excel')
@@ -395,25 +403,45 @@ server <- function(input, output, session) {
 	})
 	
 	output$ab_table_detail <- DT::renderDataTable({
-		# reproduce ab_table
+		# reproduce ab_table to match selected rows
 		df1 <- brackenData() %>% 
 			group_by(file) %>%
-			mutate(freq = round(freq, 3)) %>%
 			slice_head(n = input$topn) %>%
 			summarize_at( c("name", "new_est_reads","freq"), .funs = "paste", collapse = " | " )
 		
 		rowselected <- df1$file[ input$ab_table_rows_selected ]
-		df2 <- brackenData()[file %in% rowselected, ]
+		df2 <- brackenData()[file %in% rowselected, ] %>% 
+			dplyr::mutate(kraken_reads = kraken_assigned_reads,bracken_corr_reads = new_est_reads, freq = round(freq*100, 2)) %>% 
+			dplyr::select(name, taxonomy_id, kraken_reads, bracken_corr_reads, freq) %>%
+			dplyr::filter(freq >= input$filterFreq)
 		
+		caption <- if_else(length(rowselected) == 0, "Select a sample from the table on the left", 
+											 paste("Bracken abundance table for", tags$b(rowselected)))
 		DT::datatable(df2, 
 									selection = "single",
-									caption = "Detailed bracken abundance table for ...",
-									filter = 'top',
+									caption = HTML(caption),
+									#caption = HTML(paste("Bracken abundance table", tags$b(rowselected))),
+									#filter = 'top',
 									extensions = 'Buttons', 
 									options = list(dom = 'Btp', 
 																 buttons = c('copy', 'csv', 'excel')
 									), 
-									rownames = FALSE, class = 'hover row-border')
+									rownames = FALSE, class = 'hover row-border') %>%
+		DT::formatStyle('freq',
+										background = styleColorBar(c(0, 100), 'skyblue'),
+										backgroundSize = '95% 70%',
+										backgroundRepeat = 'no-repeat',
+										backgroundPosition = 'right') %>%
+		DT::formatStyle('bracken_corr_reads',
+											background = styleColorBar(c(0,max(df2$bracken_corr_reads)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+		DT::formatStyle('kraken_reads',
+											background = styleColorBar(c(0,max(df2$kraken_reads)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right')
 	})
 	
 	session$onSessionEnded(function() {

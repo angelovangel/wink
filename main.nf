@@ -202,6 +202,9 @@ process kraken {
             -i ${filename}_k2.report \
             -l ${params.taxlevel} \
             -o ${filename}_bracken.tsv
+
+        # get # of unclassified reads from _k2.report and add to _bracken.tsv, they are under 'kraken_assigned_reads', name: unclassified
+        echo -e unclassified '\t\t\t' \$(head -n 1 ${filename}_k2.report | cut -f 2) '\t\t\t' >> ${filename}_bracken.tsv
         """
 
 }
