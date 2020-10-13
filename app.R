@@ -107,10 +107,11 @@ ui <- dashboardPage(title = "WINK",
 			tabPanel("Taxonomy and abundance", #-----------------------------
 							 fluidRow(
 							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE,
-							 			title = "Kraken read assignment statistics",
-							 			valueBoxOutput("all_reads", width = 4),
-							 			valueBoxOutput("ass_reads", width = 4),
-							 			valueBoxOutput("unass_reads", width = 4)
+							 			title = "Kraken read assignment per sample",
+							 			infoBoxOutput("current_barcode", width = 3),
+							 			infoBoxOutput("all_reads", width = 3),
+							 			infoBoxOutput("ass_reads", width = 3),
+							 			infoBoxOutput("unass_reads", width = 3)
 							 	)
 							 ),
 							 fluidRow(
@@ -237,7 +238,7 @@ server <- function(input, output, session) {
 
 	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
-	krakenData <- reactiveValues(current_barcode = NULL, all_reads = 0, assigned_reads = 0, unassigned_reads = 0)
+	krakenData <- reactiveValues(all_reads = 0, assigned_reads = 0, unassigned_reads = 0)
 	nxf <- reactiveValues(pid = 0)
 	
 	# OBSERVERS------------------------------------------------------------------
@@ -327,7 +328,7 @@ server <- function(input, output, session) {
 	 	pxout()
 	 	#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	 })
-	#
+	# value boxes outputs for stats tab--------------------------
 	output$stats <- DT::renderDataTable({
 		df <- statsData() %>% 
 			dplyr::mutate(file = basename(tools::file_path_sans_ext(file)),
@@ -403,21 +404,34 @@ server <- function(input, output, session) {
 		)
 	})
 	
-	output$all_reads <- renderValueBox({
-		valueBox(
-			value = ifelse(is.null(last_selection$row_value), 
-										 0, 
-										 krakenData$all_reads),
-			subtitle = ifelse(is.null(last_selection$row_value),
-												"Select a sample",
-												paste("All reads for", last_selection$row_value)
-			), 
+	# value boxes outputs for kraken tab---------------------------
+	
+	output$current_barcode <- renderInfoBox({
+		infoBox(
+			 value = ifelse(is.null(last_selection$row_value), 
+			 							 "Select a sample", 
+			 							 last_selection$row_value
+			 							 ),
+			 title = "Sample", 
+			icon = icon("vial"),
 			color = 'light-blue'
 		)
 	})
 	
-	output$ass_reads <- renderValueBox({
-		valueBox(
+	output$all_reads <- renderInfoBox({
+		infoBox(
+			value = ifelse(is.null(last_selection$row_value), 
+										 0, 
+										 krakenData$all_reads),
+			title = "All reads",
+			subtitle = last_selection$row_value,
+			icon = icon("bars"),
+			color = 'light-blue'
+		)
+	})
+	
+	output$ass_reads <- renderInfoBox({
+		infoBox(
 			value = ifelse(is.null(last_selection$row_value), 
 										 0, 
 										 paste(krakenData$assigned_reads, 
@@ -426,16 +440,15 @@ server <- function(input, output, session) {
 										"%)"
 										)
 							),
-			subtitle = ifelse(is.null(last_selection$row_value),
-												"Select a sample",
-												paste("Assigned reads for", last_selection$row_value)
-									), 
+			title = "Assigned reads", 
+			subtitle = last_selection$row_value,
+			icon = icon("database"),
 			color = 'light-blue'
 		)
 	})
 	
-	output$unass_reads <- renderValueBox({
-		valueBox(
+	output$unass_reads <- renderInfoBox({
+		infoBox(
 				value = ifelse(is.null(last_selection$row_value), 
 											 0, 
 											 paste(krakenData$unassigned_reads, 
@@ -444,15 +457,14 @@ server <- function(input, output, session) {
 											 			"%)"
 											 )
 				),
-				subtitle = ifelse(is.null(last_selection$row_value),
-													"Select a sample",
-													paste("Unassigned reads for", last_selection$row_value)
-				), 
-			color = 'light-blue'
+				title = "Unassigned reads",
+				subtitle = last_selection$row_value,
+				icon = icon("question"),
+				color = 'light-blue'
 		)
 	})
 	
-	#------------------------------------------------
+	
 	# retain selected row in a temp reactive variable to enable persistent selection
 	# without this, the row is de-selected after each referesh of the table
 	last_selection <- reactiveValues(row_value = NULL)
