@@ -106,6 +106,14 @@ ui <- dashboardPage(title = "WINK",
 			),#---------------------------------------------------------------
 			tabPanel("Taxonomy and abundance", #-----------------------------
 							 fluidRow(
+							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE,
+							 			title = "Kraken read assignment statistics",
+							 			valueBoxOutput("all_reads", width = 4),
+							 			valueBoxOutput("ass_reads", width = 4),
+							 			valueBoxOutput("unass_reads", width = 4)
+							 	)
+							 ),
+							 fluidRow(
 							 	box(width = 6, 
 							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
 							 			title = "Bracken results per sample", 
@@ -225,12 +233,11 @@ server <- function(input, output, session) {
 		summarize_at( c("name"), .funs = "paste", collapse = " | " )
 	})
 	
-	
 	pxout <- reactiveFileReader(1000, session, ".pxout", readLines)
 
 	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
-	krakenData <- reactiveValues(reads = 0, assigned_reads = 0, unassigned_reads = 0)
+	krakenData <- reactiveValues(current_barcode = NULL, all_reads = 0, assigned_reads = 0, unassigned_reads = 0)
 	nxf <- reactiveValues(pid = 0)
 	
 	# OBSERVERS------------------------------------------------------------------
@@ -246,7 +253,8 @@ server <- function(input, output, session) {
 		seqData$treads <- si_fmt( sum(statsData()$num_seqs, na.rm = TRUE) )
 		seqData$tbases <- si_fmt( sum(statsData()$sum_len, na.rm = TRUE) )
 		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE)
-		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) ) 
+		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) )
+		
 	})
 	
 	
@@ -395,6 +403,55 @@ server <- function(input, output, session) {
 		)
 	})
 	
+	output$all_reads <- renderValueBox({
+		valueBox(
+			value = ifelse(is.null(last_selection$row_value), 
+										 0, 
+										 krakenData$all_reads),
+			subtitle = ifelse(is.null(last_selection$row_value),
+												"Select a sample",
+												paste("All reads for", last_selection$row_value)
+			), 
+			color = 'light-blue'
+		)
+	})
+	
+	output$ass_reads <- renderValueBox({
+		valueBox(
+			value = ifelse(is.null(last_selection$row_value), 
+										 0, 
+										 paste(krakenData$assigned_reads, 
+										"(", 
+										round(krakenData$assigned_reads/sum(krakenData$assigned_reads, krakenData$unassigned_reads)*100, 0),
+										"%)"
+										)
+							),
+			subtitle = ifelse(is.null(last_selection$row_value),
+												"Select a sample",
+												paste("Assigned reads for", last_selection$row_value)
+									), 
+			color = 'light-blue'
+		)
+	})
+	
+	output$unass_reads <- renderValueBox({
+		valueBox(
+				value = ifelse(is.null(last_selection$row_value), 
+											 0, 
+											 paste(krakenData$unassigned_reads, 
+											 			"(", 
+											 			round(krakenData$unassigned_reads/sum(krakenData$assigned_reads, krakenData$unassigned_reads)*100, 0),
+											 			"%)"
+											 )
+				),
+				subtitle = ifelse(is.null(last_selection$row_value),
+													"Select a sample",
+													paste("Unassigned reads for", last_selection$row_value)
+				), 
+			color = 'light-blue'
+		)
+	})
+	
 	#------------------------------------------------
 	# retain selected row in a temp reactive variable to enable persistent selection
 	# without this, the row is de-selected after each referesh of the table
@@ -404,7 +461,8 @@ server <- function(input, output, session) {
 	observeEvent(input$ab_table_rows_selected,{ 
 		
 		last_selection$row_value = brackenDataLeft()$file[input$ab_table_rows_selected]
-		print(last_selection$row_value)
+		#print(last_selection$row_value)
+		
 	})
 	
 	#------------------------------------------------
@@ -427,22 +485,29 @@ server <- function(input, output, session) {
 	output$ab_table_detail <- DT::renderDataTable({
 		# validate ab_table is not empty
 		validate(
-			need(
-				nrow( brackenData() ) != 0, "No data here"
-			)
+			need(!is.null(last_selection$row_value), "No data here"),
+			need( nrow(brackenData() ) != 0, "No data here" )
 		)
 		
 		# use the row value reactive to filter
-		df2 <- brackenData()[file %in% last_selection$row_value, ] %>% 
+		df_assigned <- brackenData() %>% 
+			dplyr::filter(file == last_selection$row_value, name != "unclassified") %>%
 			
-			dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
 			dplyr::mutate(kraken_reads = kraken_assigned_reads,bracken_corr_reads = new_est_reads, freq = round(freq*100, 2)) %>% 
 			dplyr::select(name, taxonomy_id, kraken_reads, bracken_corr_reads, freq) %>%
 			dplyr::filter(freq >= input$filterFreq)
 		
+		df_unassigned <- brackenData() %>% 
+			dplyr::filter(file == last_selection$row_value, name == "unclassified")
+		
+		# set kraken statistics for value box
+		krakenData$assigned_reads = sum( df_assigned$kraken_reads )
+		krakenData$unassigned_reads = sum( df_unassigned$kraken_assigned_reads)
+		krakenData$all_reads = sum(df_assigned$kraken_reads, df_unassigned$kraken_assigned_reads)
+		
 		caption <- if_else(is.na(last_selection$row_value), "Select a sample from the table on the left", 
 											 paste("Bracken abundance table for", tags$b(last_selection$row_value)))
-		DT::datatable(df2, 
+		DT::datatable(df_assigned, 
 									selection = "single",
 									caption = HTML(caption),
 									#caption = HTML(paste("Bracken abundance table", tags$b(rowselected))),
@@ -458,12 +523,12 @@ server <- function(input, output, session) {
 										backgroundRepeat = 'no-repeat',
 										backgroundPosition = 'right') %>%
 		DT::formatStyle('bracken_corr_reads',
-											background = styleColorBar(c(0, max(df2$bracken_corr_reads, na.rm = T)), 'skyblue'),
+											background = styleColorBar(c(0, max(df_assigned$bracken_corr_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right') %>%
 		DT::formatStyle('kraken_reads',
-											background = styleColorBar(c(0,max(df2$kraken_reads, na.rm = T)), 'skyblue'),
+											background = styleColorBar(c(0,max(df_assigned$kraken_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right')
