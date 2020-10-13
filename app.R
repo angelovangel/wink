@@ -494,6 +494,9 @@ server <- function(input, output, session) {
 									rownames = FALSE, class = 'hover row-border')
 	})
 	
+	taxdb_left = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id="
+	taxdb_right = "&lvl=3&lin=f&keep=1&srchmode=1&unlock"
+	
 	output$ab_table_detail <- DT::renderDataTable({
 		# validate ab_table is not empty
 		validate(
@@ -505,8 +508,17 @@ server <- function(input, output, session) {
 		df_assigned <- brackenData() %>% 
 			dplyr::filter(file == last_selection$row_value, name != "unclassified") %>%
 			
-			dplyr::mutate(kraken_reads = kraken_assigned_reads,bracken_corr_reads = new_est_reads, freq = round(freq*100, 2)) %>% 
-			dplyr::select(name, taxonomy_id, kraken_reads, bracken_corr_reads, freq) %>%
+			dplyr::mutate(
+				taxonomyID = paste0(taxdb_left, taxonomy_id, taxdb_right), #two-step mutate to build href
+				kraken_reads = kraken_assigned_reads,
+				bracken_corr_reads = new_est_reads, 
+				freq = round(freq*100, 2)
+				) %>% 
+			dplyr::mutate(
+				taxonomyID = paste0("<a target = '_blank' href='", taxonomyID, "'>", taxonomy_id, "</a>")
+				) %>%
+			
+			dplyr::select(name, taxonomyID, kraken_reads, bracken_corr_reads, freq) %>%
 			dplyr::filter(freq >= input$filterFreq)
 		
 		df_unassigned <- brackenData() %>% 
@@ -520,6 +532,7 @@ server <- function(input, output, session) {
 		caption <- if_else(is.na(last_selection$row_value), "Select a sample from the table on the left", 
 											 paste("Bracken abundance table for", tags$b(last_selection$row_value)))
 		DT::datatable(df_assigned, 
+									escape = FALSE,
 									selection = "single",
 									caption = HTML(caption),
 									#caption = HTML(paste("Bracken abundance table", tags$b(rowselected))),
