@@ -15,6 +15,7 @@ if( !nextflow.version.matches('>=19.08') ) {
  params.kraken_gz = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"
  params.kraken_store = "$HOME/db/kraken"
  params.weakmem = false
+ params.skip_kraken = false
  params.taxlevel = "S" //level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
  params.help = false
 
@@ -148,6 +149,8 @@ if(params.kraken_gz){
 process krakenDB {
     storeDir "${params.kraken_store}"
 
+when:
+    !params.skip_kraken
 input:
     path kraken_file from kraken_gz_ch
 output:
@@ -177,6 +180,8 @@ process kraken {
     tag "working on: ${filename}; barcode: ${key}"
     publishDir "${scratchdir}/${key}", mode: 'copy', pattern: '*.tsv'
     
+    when:
+        !params.skip_kraken
     input:
         tuple key, filename, file(fastq), file(db) from kraken_ch_2
     
@@ -223,7 +228,9 @@ Channel
 process combine {
     tag "working on: ${barcode}"
     publishDir "${params.results}/latest-bracken", mode: 'copy', pattern: '*tsv'
-
+    
+    when:
+        !params.skip_kraken
     input:
         tuple barcode, path(barcodedir) from combine_ch
     output:

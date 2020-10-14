@@ -65,25 +65,35 @@ ui <- dashboardPage(title = "WINK",
 							 		actionButton("stop", "Stop WINK", style = "color: #3498DB;", icon = icon("power-off")),
 							 		actionButton("more", "More options", style = "color: #3498DB;", icon = icon("cog"), class = "rightAlign"),
 							 		tags$div(id = "optional_inputs",
-							 						 checkboxInput("testrun", "Start test run"),
+							 						 column(width = 12,
+							 							checkboxInput("testrun", "Simulate run with test data", width = "100%"),
+							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%")
+							 							),
+							 						 column(width = 6,
 							 						 selectizeInput("nxf_profile", 
 							 						 							 "Select nextflow profile", 
-							 						 							 width = "40%",
+							 						 							 width = "100%",
 							 						 							 choices = c("docker", "conda", "local"), 
 							 						 							 selected = "docker"),
-							 						 textInput("kraken_gz", 
-							 						 					width = "40%",
-							 						 					"Path to kraken2 database (gz file)", 
-							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"),
-							 						 
-							 						 selectizeInput("taxlevel", 
-							 						 							 "Taxonomic level for kraken2 abundance estimation", 
-							 						 							 width = "40%",
-							 						 							 choices = c("Domain" = "D", "Phylum" = "P", "Class" = "C", "Order" = "O", "Family" = "F", "Genus" = "G", "Species" = "S"), 
-							 						 							 selected = "S")
-							 						 
 							 						 ),
-							 		verbatimTextOutput("stdout")
+							 						 column(width = 6,
+							 						 		selectizeInput("taxlevel", 
+							 						 									 "Taxonomic level for kraken2 abundance", 
+							 						 									 width = "100%",
+							 						 									 choices = c("Domain" = "D", "Phylum" = "P", "Class" = "C", "Order" = "O", "Family" = "F", "Genus" = "G", "Species" = "S"), 
+							 						 									 selected = "S")
+							 						 ),
+							 						 column(width = 6,
+							 						 textInput("kraken_gz", 
+							 						 					width = "100%",
+							 						 					"Path to kraken2 database (gz file)", 
+							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz")
+							 						 )
+							 		),
+							 		tags$hr(),
+							 		column(widt = 12,
+							 			verbatimTextOutput("stdout")
+							 		)
 							 	)
 							 ),
 							 fluidRow(
@@ -399,7 +409,7 @@ server <- function(input, output, session) {
 	output$runtime <- renderValueBox({
 		valueBox(
 			value = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" ),
-			subtitle = "Running time",
+			subtitle = "Nanopore running time",
 			color = 'light-blue'
 		)
 	})
