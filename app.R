@@ -67,7 +67,8 @@ ui <- dashboardPage(title = "WINK",
 							 		tags$div(id = "optional_inputs",
 							 						 column(width = 12,
 							 							checkboxInput("testrun", "Simulate run with test data", width = "100%"),
-							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%")
+							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
+							 							checkboxInput("weakmem", "Do not load kraken2 database in RAM (use on weak machines)")
 							 							),
 							 						 column(width = 6,
 							 						 selectizeInput("nxf_profile", 
@@ -92,7 +93,8 @@ ui <- dashboardPage(title = "WINK",
 							 		),
 							 		tags$hr(),
 							 		column(widt = 12,
-							 			verbatimTextOutput("stdout")
+							 			verbatimTextOutput("stdout"),
+							 			verbatimTextOutput("log_output")
 							 		)
 							 	)
 							 ),
@@ -170,6 +172,18 @@ server <- function(input, output, session) {
 							 "first_write", "last_write")
 	
 	# REACTIVES ------------------------------------------------------------------
+	
+	#---create and read watch file that accumulates ps monitor of the nxf process
+	nxf_logfile <- tempfile() # could use tempfile
+	system2("touch", nxf_logfile)
+	nxf_logfile_data <- reactiveFileReader( 1000, session, nxf_logfile, readLines )
+	
+	#---the same for the nxf output
+	nxf_outfile <- tempfile()
+	system2("touch", nxf_outfile)
+	nxf_outfile_data <- reactiveFileReader( 1000, session, nxf_outfile, readLines )
+	
+	
 	# reactive to get actual list of stats files
 	statsFiles <- reactivePoll(
 		1000, session,
@@ -234,6 +248,7 @@ server <- function(input, output, session) {
 			}
 		})
 	
+	
 	# this is the summary table, one row per barcode
 	brackenDataLeft <- reactive({
 		brackenData() %>% 
@@ -244,12 +259,10 @@ server <- function(input, output, session) {
 		summarize_at( c("name"), .funs = "paste", collapse = " | " )
 	})
 	
-	pxout <- reactiveFileReader(1000, session, ".pxout", readLines)
-
 	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
 	krakenData <- reactiveValues(all_reads = 0, assigned_reads = 0, unassigned_reads = 0)
-	nxf <- reactiveValues(pid = 0)
+	nxf <- reactiveValues(pid = NULL, watch = NULL)
 	
 	# OBSERVERS------------------------------------------------------------------
 	# observer for optional inputs
@@ -279,10 +292,12 @@ server <- function(input, output, session) {
 		} else {
 			# hard set fastq folder
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
+		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "")
 		
 		nxf_args <<- c("run" ,
 									 "main.nf",
-									 "--fastq_pass", selectedFolder, 
+									 "--fastq_pass", selectedFolder,
+									 skip_kraken,
 									 "--kraken_gz", input$kraken_gz)
 		cat("nextflow", nxf_args)
 		}
@@ -294,32 +309,40 @@ server <- function(input, output, session) {
 		if(is.integer(input$fastq_pass_folder)) {
 			nx_notify_error("Select run folder first!")
 		} else {
-			
-			pid <- sys::exec_background("nextflow", 
+			nxf$pid <- sys::exec_background("nextflow", 
 																	args = nxf_args, 
-																	std_out = ".pxout")
-			nxf$pid <- pid
-			nx_notify_success(paste("Nextflow pipeline started with pid:", pid))
+																	std_out = nxf_outfile
+																	)
+			
+			nx_notify_success(paste("Nextflow pipeline started with pid", nxf$pid))
+			
+			nxf$watch <- sys::exec_background("bin/watch-pid.sh", 
+										 args = nxf$pid, 
+										 std_out = nxf_logfile
+										 )
 			
 			shinyjs::enable("stop")
 			shinyjs::disable(id = "run")
 			shinyjs::toggleCssClass("stop", "yellow")
 			
 			shinyjs::html(selector = ".logo", 
-										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running, pid: ", 
+										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running with pid ", 
 																 nxf$pid, "</p>")
 										)
 			
-			writeLines("", ".pxout")
+			writeLines("", ".pxout", )
 			
 		}
 	})
 	
 	# and kill 
 	observeEvent(input$stop, {
-		if (nxf$pid != 0) {
+		
+		if (nxf$pid != 1 && nxf$watch != 1) { # don't kill pideinz please:)
 			tools::pskill(nxf$pid)
-			nx_notify_warning(paste("Nextflow pipeline with pid:", nxf$pid, "was stopped!"))
+			#tools::pskill(nxf$watch)
+			
+			nx_notify_warning(paste("Nextflow pipeline with pid", nxf$pid, "was stopped!"))
 			shinyjs::enable("run")
 			shinyjs::toggleCssClass("stop", "yellow")
 			shinyjs::disable("stop")
@@ -330,14 +353,16 @@ server <- function(input, output, session) {
 	
 	
 	# ------------------------------------------------------------------
-	output$ab_table <- renderTable({
-		
+	
+	 output$log_output <- renderPrint({
+	 	nxf_logfile_data() %>% tail(2)
+	 	})
+	
+	output$nxf_output <- renderPrint({
+		nxf_outfile_data()
+		#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	})
 	
-	 output$nxf_output <- renderPrint({
-	 	pxout()
-	 	#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
-	 })
 	# value boxes outputs for stats tab--------------------------
 	output$stats <- DT::renderDataTable({
 		df <- statsData() %>% 
@@ -570,6 +595,9 @@ server <- function(input, output, session) {
 	})
 	
 	session$onSessionEnded(function() {
+		isolate( tools::pskill(nxf$watch) )
+		unlink(nxf_logfile)
+		unlink(nxf_outfile)
 		#system2("rm", args = c("-rf", "work")) # comment out on deploy
 	})
 	

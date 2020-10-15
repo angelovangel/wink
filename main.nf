@@ -80,7 +80,7 @@ log.info """
 // used to touch the files at start so that all available fastq files are processed 
  Channel
     .fromPath( "${params.fastq_pass}/**.fastq", type: 'file')
-    //.ifEmpty { error "Can not find any barcode* folders in ${params.fastq_pass}" }
+    .ifEmpty { error "Can not find any barcode* folders in ${params.fastq_pass}" }
     .set { fastq_ch }
 
 process touch {
