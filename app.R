@@ -174,13 +174,13 @@ server <- function(input, output, session) {
 	# REACTIVES ------------------------------------------------------------------
 	
 	#---create and read watch file that accumulates ps monitor of the nxf process
-	nxf_logfile <- tempfile() # could use tempfile
-	system2("touch", nxf_logfile)
+	nxf_logfile <- tempfile() 
+	system2( "touch", c(nxf_logfile, "&& echo 'ps monitor for the wink nextflow process' >", nxf_logfile) )
 	nxf_logfile_data <- reactiveFileReader( 1000, session, nxf_logfile, readLines )
 	
 	#---the same for the nxf output
 	nxf_outfile <- tempfile()
-	system2("touch", nxf_outfile)
+	system2( "touch", c(nxf_outfile, "&& echo 'wink nextflow pipeline output' >", nxf_outfile) )
 	nxf_outfile_data <- reactiveFileReader( 1000, session, nxf_outfile, readLines )
 	
 	
@@ -288,7 +288,7 @@ server <- function(input, output, session) {
 		
 		# build nxf call and print to stdout
 		if (is.integer(input$fastq_pass_folder)) {
-			cat("No fastq_pass folder selected\n")
+			cat("wink command preview, select a fastq_pass folder to start\n")
 		} else {
 			# hard set fastq folder
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
@@ -355,11 +355,11 @@ server <- function(input, output, session) {
 	# ------------------------------------------------------------------
 	
 	 output$log_output <- renderPrint({
-	 	nxf_logfile_data() %>% tail(2)
+	 	cat({ nxf_logfile_data() %>% tail(2)}, sep = "\n" )
 	 	})
 	
 	output$nxf_output <- renderPrint({
-		nxf_outfile_data()
+		cat(nxf_outfile_data(), sep = "\n")
 		#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	})
 	
