@@ -31,7 +31,7 @@ The nextflow pipeline can be run with docker or conda (e.g. use `--profile docke
 
 ### GUI part (Shiny)
 
-The easiest way to install all dependencies for running the Shiny app is via `renv`. There is a `renv.lock` file provided. 
+The Shiny app dependencies are managed with `renv`. This means that it is enough to just start the `wink.Rproj` project and call `renv::restore()`.
 
 ## Running the pipeline and explanation of the results
 

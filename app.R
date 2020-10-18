@@ -261,7 +261,7 @@ server <- function(input, output, session) {
 	# reactive vals for storing total, mapped reads, nxf process info...
 	seqData <- reactiveValues(nsamples = 0, treads = 0, tbases = 0, n50 = 0, runtime = 0)
 	krakenData <- reactiveValues(all_reads = 0, assigned_reads = 0, unassigned_reads = 0)
-	nxf <- reactiveValues(pid = NULL, watch = NULL)
+	nxf <- reactiveValues(pid = NULL, watch = NULL, status = NULL)
 	
 	# OBSERVERS------------------------------------------------------------------
 	# observer for optional inputs
@@ -291,13 +291,15 @@ server <- function(input, output, session) {
 		} else {
 			# hard set fastq folder
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
-		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "")
+		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
+		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", TRUE ~ c("-profile", input$nxf_profile) )
 		
 		nxf_args <<- c("run" ,
 									 "main.nf",
 									 "--fastq_pass", selectedFolder,
 									 skip_kraken,
-									 "--kraken_gz", input$kraken_gz)
+									 "--kraken_gz", input$kraken_gz, 
+									 nxf_profile)
 		cat("nextflow", nxf_args)
 		}
 	})
