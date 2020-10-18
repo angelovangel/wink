@@ -5,3 +5,4 @@ work*
 .pxout
 *.fastq
 .Rhistory
+.Rproj.user

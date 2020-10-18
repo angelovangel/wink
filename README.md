@@ -67,6 +67,8 @@ becomes `barcode01.fastq`. The `latest-fastq` is continously updated as new read
 
 The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](), using some built-in nextflow functions to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run.
 
+***
+
 <a name="footnote1">1</a>: The reads generated *before* the pipeline is started are also included in the analysis by changing their timestamps. Take care if you rely on this information for other purposes.
 
 <a name="footnote2">2</a>: The nextflow pipeline does not finish, because it keeps watching for new files. When run via the Shiny app, it is killed by the R process when you close the browser window. When run on the command line, you can kill it with Ctr-C.
