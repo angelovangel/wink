@@ -35,7 +35,7 @@ The easiest way to install all dependencies for running the Shiny app is via `re
 
 ## Running the pipeline and explanation of the results
 
-WINK can be run either via the Shiny app (in a browser, no command line needed), or by executing the nextflow pipeline from the command line.
+WINK can be run either via the Shiny app (in a browser, no command line needed), or by executing the nextflow pipeline from the command line<sup>[2](#footnote2)</sup>.
 
 The input for the pipeline is one of:
 
@@ -69,4 +69,4 @@ The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](), u
 
 <a name="footnote1">1</a>: The reads generated *before* the pipeline is started are also included in the analysis by changing their timestamps. Take care if you rely on this information for other purposes.
 
-<a name="footnote2">2</a>: Certainly will not run on Windows. MacOS and Linux are fine.
+<a name="footnote2">2</a>: The nextflow pipeline does not finish, because it keeps watching for new files. When run via the Shiny app, it is killed by the R process when you close the browser window. When run on the command line, you can kill it with Ctr-C.
