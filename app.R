@@ -276,8 +276,13 @@ server <- function(input, output, session) {
 		seqData$treads <- si_fmt( sum(statsData()$num_seqs, na.rm = TRUE) )
 		seqData$tbases <- si_fmt( sum(statsData()$sum_len, na.rm = TRUE) )
 		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE)
-		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) )
-		
+		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) ) # use asPOSIXct here!
+		nxflog <- nxf_logfile_data()
+		nxf$status <- ifelse(length( nxflog ) == 1, 
+												 "Uknown", 
+												 # shorten this?
+												 gsub(pattern = "\\s+", " ", tail(nxflog, 1)) %>% trimws() %>% strsplit(split = " ")  %>% unlist() %>% tail(1)
+												 )
 	})
 	
 	
@@ -336,6 +341,15 @@ server <- function(input, output, session) {
 		}
 	})
 	
+	# stop app if the nxf process fails
+	observeEvent(nxf$status, {
+		if (nxf$status == "Z") {
+			nx_report_warning("Nextflow exited!", "If you pressed Stop WINK then this is OK, check the logfiles otherwise. Press Reset to start over.")
+			shinyjs::disable("stop")
+			shinyjs::toggleCssClass("stop")
+		}
+	})
+	
 	# and kill 
 	observeEvent(input$stop, {
 		
@@ -343,9 +357,9 @@ server <- function(input, output, session) {
 			tools::pskill(nxf$pid)
 			#tools::pskill(nxf$watch)
 			
-			nx_notify_warning(paste("Nextflow pipeline with pid", nxf$pid, "was stopped!"))
+			#nx_notify_warning(paste("Nextflow pipeline with pid", nxf$pid, "was stopped!"))
 			shinyjs::enable("run")
-			shinyjs::toggleCssClass("stop", "yellow")
+			shinyjs::toggleCssClass("stop")
 			shinyjs::disable("stop")
 			shinyjs::html(selector = ".logo", 
 										html = "WINK - What's In my Nanopore reads, with Kraken2, in real-time")
@@ -357,6 +371,7 @@ server <- function(input, output, session) {
 	
 	 output$log_output <- renderPrint({
 	 	cat({ nxf_logfile_data() %>% tail(2)}, sep = "\n" )
+	 	#cat(file = stderr(), "nxf_status: ", nxf$status, "\n")
 	 	})
 	
 	output$nxf_output <- renderPrint({
