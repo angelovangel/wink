@@ -1,0 +1,10 @@
+name: wink
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - seqkit=0.13.2
+  - kraken2=2.1.0
+  - bracken=2.6.0
+  - r-dplyr
+  - r-data.table

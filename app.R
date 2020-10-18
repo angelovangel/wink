@@ -7,7 +7,7 @@
 require(shiny)
 require(shinydashboard)
 require(shinyFiles)
-require(shinypop)
+require(shinypop) # remotes::install_github("dreamRs/shinypop")
 require(shinyjs)
 require(data.table)
 require(DT)

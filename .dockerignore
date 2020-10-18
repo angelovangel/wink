@@ -1,0 +1,7 @@
+fastq_pass*
+.nextflow*
+.git*
+.Rhistory
+testdata
+work
+results*

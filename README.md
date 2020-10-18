@@ -6,6 +6,32 @@ What's In my Nanopore reads, with Kraken2, in real-time
 
 WINK is a platform for real-time phylogenetic classification and species quantification for Nanopore sequencing data, based on [kraken2]() and [bracken](https://ccb.jhu.edu/software/bracken/). It can be used both in real-time (monitor a specified folder for new reads, e.g. `fastq_pass` and continuously update results) and post-run (collect all the reads and perform analysis).<sup>[1](#footnote1)</sup> The software consists of two parts - a nextflow pipeline (can be executed on its own) and a graphical user interface (a Shiny app) which collects the output of the nextflow pipeline and diplays it as a dashboard page.
 
+## Install
+
+### nextflow part
+
+-  If you don't have nextflow: 
+
+```bash
+curl -s https://get.nextflow.io | bash
+```
+
+- get the latest WINK version from github:
+
+```bash
+git clone https://github.com/angelovangel/wink.git
+```
+
+The nextflow pipeline can be run with docker or conda (e.g. use `--profile docker`), in which case you don't need to manually install the dependencies. These are:
+
+- `seqkit`
+- `kraken2`
+- `bracken`
+- `R`
+
+### GUI part (Shiny)
+
+The easiest way to install all dependencies for running the Shiny app is via `renv`. There is a `renv.lock` file provided. 
 
 ## Running the pipeline and explanation of the results
 
@@ -39,8 +65,7 @@ becomes `barcode01.fastq`. The `latest-fastq` is continously updated as new read
 
 ## Under the hood
 
-The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](), using some built-in nextflow functions to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run. WINK runs in a docker container, so there are no external requirements.<sup>[2](#footnote2)</sup>
-
+The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](), using some built-in nextflow functions to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run.
 
 <a name="footnote1">1</a>: The reads generated *before* the pipeline is started are also included in the analysis by changing their timestamps. Take care if you rely on this information for other purposes.
 

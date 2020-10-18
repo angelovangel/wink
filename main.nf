@@ -176,7 +176,7 @@ kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)
 //kraken_ch_2.view()
 
 process kraken {
-    container 'aangeloo/kraken2:latest'
+    //container 'aangeloo/kraken2:latest'
     tag "working on: ${filename}; barcode: ${key}"
     publishDir "${scratchdir}/${key}", mode: 'copy', pattern: '*.tsv'
     
