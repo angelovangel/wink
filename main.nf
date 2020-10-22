@@ -123,7 +123,9 @@ process watch {
     # this is executed for each new bunch of reads, leads to blowing up the storage! 
     # so cat directly to latestfastqdir
 
-    cat ${x}/*.fastq > $latestfastqdir/${x}.fastq
+    # make sure the files are cat in the right order
+    find ${x} -type f -name '*.fastq' | sort -V | xargs cat >> $latestfastqdir/${x}.fastq
+
 
     # do this in the same process, otherwise comes to file blocking from cat and clashes
     head $latestfastqdir/${x}.fastq | get-times.sh min > firsttime.txt

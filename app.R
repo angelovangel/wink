@@ -9,6 +9,7 @@ require(shinydashboard)
 require(shinyFiles)
 require(shinypop) # remotes::install_github("dreamRs/shinypop")
 require(shinyjs)
+require(markdown)
 require(data.table)
 require(DT)
 require(dplyr)
@@ -147,7 +148,7 @@ ui <- dashboardPage(title = "WINK",
 			tabPanel("Nextflow output",
 							 verbatimTextOutput("nxf_output")
 			),
-			tabPanel("Help")
+			tabPanel("Help", includeMarkdown("README.md"))
 		)
 	)
 )
@@ -320,7 +321,7 @@ server <- function(input, output, session) {
 																	std_out = nxf_outfile
 																	)
 			
-			nx_notify_success(paste("Nextflow pipeline started with pid", nxf$pid))
+			#nx_notify_success(paste("Nextflow pipeline started with pid", nxf$pid))
 			
 			nxf$watch <- sys::exec_background("bin/watch-pid.sh", 
 										 args = nxf$pid, 
@@ -335,9 +336,6 @@ server <- function(input, output, session) {
 										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running with pid ", 
 																 nxf$pid, "</p>")
 										)
-			
-			writeLines("", ".pxout", )
-			
 		}
 	})
 	
@@ -347,6 +345,8 @@ server <- function(input, output, session) {
 			nx_report_warning("Nextflow exited!", "If you pressed Stop WINK then this is OK, check the logfiles otherwise. Press Reset to start over.")
 			shinyjs::disable("stop")
 			shinyjs::toggleCssClass("stop")
+			shinyjs::html(selector = ".logo", 
+										html = "WINK - What's In my Nanopore reads, with Kraken2, in real-time")
 		}
 	})
 	
@@ -358,7 +358,7 @@ server <- function(input, output, session) {
 			#tools::pskill(nxf$watch)
 			
 			#nx_notify_warning(paste("Nextflow pipeline with pid", nxf$pid, "was stopped!"))
-			shinyjs::enable("run")
+			#shinyjs::enable("run")
 			shinyjs::toggleCssClass("stop")
 			shinyjs::disable("stop")
 			shinyjs::html(selector = ".logo", 
