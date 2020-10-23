@@ -10,7 +10,7 @@ WINK is a platform for real-time phylogenetic classification and species quantif
 
 ### nextflow part
 
--  If you don't have nextflow: 
+- If you don't have nextflow: 
 
 ```bash
 curl -s https://get.nextflow.io | bash
@@ -65,7 +65,7 @@ becomes `barcode01.fastq`. The `latest-fastq` is continously updated as new read
 
 ## Under the hood
 
-The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](), using some built-in nextflow functions to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run.
+The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](https://shiny.rstudio.com/), using some [built-in nextflow functions](https://www.nextflow.io/docs/latest/channel.html#watchpath) to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run.
 
 ***
 
