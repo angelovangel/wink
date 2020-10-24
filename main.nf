@@ -124,7 +124,7 @@ process watch {
     # so cat directly to latestfastqdir
 
     # make sure the files are cat in the right order
-    find -L ${x} -type f -name '*.fastq' | sort -V | xargs cat >> $latestfastqdir/${x}.fastq
+    find -L ${x} -type f -name '*.fastq' | sort -V | xargs cat > $latestfastqdir/${x}.fastq
 
 
     # do this in the same process, otherwise comes to file blocking from cat and clashes

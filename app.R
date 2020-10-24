@@ -87,7 +87,7 @@ ui <- dashboardPage(title = "WINK",
 							 						 column(width = 6,
 							 						 textInput("kraken_gz", 
 							 						 					width = "100%",
-							 						 					"Path to kraken2 database (gz file)", 
+							 						 					"Path to kraken2 database (gz file)",
 							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz")
 							 						 )
 							 		),
@@ -256,7 +256,9 @@ server <- function(input, output, session) {
 		mutate(freq = round(freq, 3)) %>%
 		group_by(file) %>%
 		slice_head(n = input$topn) %>%
-		summarize_at( c("name"), .funs = "paste", collapse = " | " )
+		summarize( across("name", .fns = paste, collapse = " | "), 
+							 across("kraken_assigned_reads", .fns = sum, na.rm = TRUE), 
+							 .groups = "keep" )
 	})
 	
 	# reactive vals for storing total, mapped reads, nxf process info...
@@ -299,11 +301,13 @@ server <- function(input, output, session) {
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
 		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
 		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", TRUE ~ c("-profile", input$nxf_profile) )
+		weakmem <<- ifelse(input$weakmem, "--weakmem", "")
 		
 		nxf_args <<- c("run" ,
 									 "main.nf",
 									 "--fastq_pass", selectedFolder,
 									 skip_kraken,
+									 weakmem,
 									 "--kraken_gz", input$kraken_gz, 
 									 nxf_profile)
 		cat("nextflow", nxf_args)
@@ -542,6 +546,7 @@ server <- function(input, output, session) {
 									options = list(dom = 'Btp', 
 																 buttons = c('copy', 'csv', 'excel')
 									), 
+									colnames = c("barcode", paste("top", input$topn, "hits"), "assigned reads"),
 									rownames = FALSE, class = 'hover row-border')
 	})
 	

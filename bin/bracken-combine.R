@@ -2,7 +2,7 @@
 
 # arg1 is a folder containing bracken output files (tsv) with results from one 4k ONT fastq file
 # arg2 is the name of the returned tsv file
-# returns a tibble with data suumarized from all files
+# returns a tibble with data summarized from all files
 require(dplyr)
 require(data.table)
 
