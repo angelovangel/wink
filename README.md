@@ -1,6 +1,6 @@
 # WINK
 
-What's In my Nanopore reads, with Kraken2, in real-time
+**W**hat's **I**n my **N**anopore reads, with **K**raken2, in real-time
 
 ## Description
 
@@ -28,6 +28,8 @@ The nextflow pipeline can be run with docker or conda (e.g. use `--profile docke
 - `kraken2`
 - `bracken`
 - `R`
+
+The results from the nextflow pipeline are by default saved in `results-wink` in the nextflow launch directory.
 
 ### GUI part (Shiny)
 

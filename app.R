@@ -55,7 +55,7 @@ ui <- dashboardPage(title = "WINK",
 							 			title = "Control panel",
 							 		
 							 		shinyDirButton(id = "fastq_pass_folder", 
-							 									 label = "Select run folder", 
+							 									 label = "Select fastq_pass folder", 
 							 									 title = "Select the fastq_pass folder",
 							 									 style = "color: #3498DB;",
 							 									 #color = "primary", 
@@ -85,10 +85,36 @@ ui <- dashboardPage(title = "WINK",
 							 						 									 selected = "S")
 							 						 ),
 							 						 column(width = 6,
-							 						 textInput("kraken_gz", 
+							 						 selectizeInput("kraken_gz", 
 							 						 					width = "100%",
-							 						 					"Path to kraken2 database (gz file)",
-							 						 					value = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz")
+							 						 					"Kraken2/Bracken index to use",
+							 						 					choices = 
+							 						 						list(
+							 						 							"Standard indexes" = 
+							 						 								c(
+							 						 									"MinusB | archaea, viral, plasmid, human, UniVec_Core | 7.3 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_minusb_20200919.tar.gz",
+							 						 									"Standard | archaea, bacteria, viral, plasmid, human, UniVec_Core | 47 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20200919.tar.gz",
+							 						 									"Standard-8 | Standard with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz",
+							 						 									"Standard-16 | Standard with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_16gb_20200919.tar.gz",
+							 						 									"PlusPF | Standard plus protozoa & fungi | 48 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_20200919.tar.gz",
+							 						 									"PlusPF-8 | PlusPF with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_8gb_20200919.tar.gz",
+							 						 									"PlusPF-16 | PlusPF with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_16gb_20200919.tar.gz",
+							 						 									"PlusPFP | Standard plus protozoa, fungi & plant | 90 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_20200919.tar.gz",
+							 						 									"PlusPFP-8 | PlusPFP with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_8gb_20200919.tar.gz",
+							 						 									"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz"
+							 						 								), 
+							 						 							"Minikraken indexes" = c(
+							 						 								"Minikraken v1 | Refseq: bacteria, archaea, viral | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v1_8GB_201904.tgz",
+							 						 								"Minikraken v2 | Refseq: bacteria, archaea, viral, human* | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
+							 						 							),
+							 						 							"16S indexes" = c(
+							 						 								"Greengenes 13.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Greengenes13.5_20200326.tgz",
+							 						 								"RDP 11.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_RDP11.5_20200326.tgz",
+							 						 								"Silva 132" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva132_20200326.tgz",
+							 						 								"Silva 138" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva138_20200326.tgz"
+							 						 							)
+							 						 						),
+							 						 					selected = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz")
 							 						 )
 							 		),
 							 		tags$hr(),
@@ -160,11 +186,13 @@ server <- function(input, output, session) {
 	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
 	)
 	
-	# handling of shinyFiles
+	# handling of shinyFiles===================================
 	volumes <- c(Home = fs::path_home(), getVolumes()() )
 	shinyDirChoose(input, "fastq_pass_folder", 
 								 roots = volumes, 
 								 session = session)
+	
+	# handling of shinyFiles===================================
 	
 	headers <- c("file", "format", "type", "num_seqs", 
 							 "sum_len", "min_len", "avg_len", "max_len", 
@@ -291,6 +319,7 @@ server <- function(input, output, session) {
 	
 	# RENDERS ------------------------------------------------------------------
 	
+	# Build parameters for nextflow run =========================================================
 	output$stdout <- renderPrint({
 		
 		# build nxf call and print to stdout
@@ -300,8 +329,9 @@ server <- function(input, output, session) {
 			# hard set fastq folder
 		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
 		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
-		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", TRUE ~ c("-profile", input$nxf_profile) )
 		weakmem <<- ifelse(input$weakmem, "--weakmem", "")
+		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", 
+															 TRUE ~ c("-profile", input$nxf_profile) )
 		
 		nxf_args <<- c("run" ,
 									 "main.nf",
@@ -313,7 +343,9 @@ server <- function(input, output, session) {
 		cat("nextflow", nxf_args)
 		}
 	})
-	# CALLS TO NEXTFLOW PIPELINE ------------------------------------------------------------------
+	# Build parameters for nextflow run =========================================================
+	
+	# CALLS TO NEXTFLOW PIPELINE ----------------------------------------------------------------
 	
 	# start
 	observeEvent(input$run, {

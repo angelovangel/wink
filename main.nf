@@ -12,7 +12,7 @@ if( !nextflow.version.matches('>=19.08') ) {
  */
  params.fastq_pass = "fastq_pass"
  params.results = "${workflow.launchDir}/results-wink"
- params.kraken_gz = "ftp://ftp.ccb.jhu.edu/pub/data/kraken2_dbs/minikraken_8GB_202003.tgz"
+ params.kraken_gz = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
  params.kraken_store = "$HOME/db/kraken"
  params.weakmem = false
  params.skip_kraken = false
@@ -193,7 +193,7 @@ process kraken {
     
     script:
     def memory = params.weakmem ? "--memory-mapping" : ""  // use --memory-mapping to avoid loading db in ram on weak systems
-    def rlength = 250
+    def rlength = 200
     
         """
         kraken2 \
