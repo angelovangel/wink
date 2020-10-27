@@ -12,7 +12,7 @@ if( !nextflow.version.matches('>=19.08') ) {
  */
  params.fastq_pass = "fastq_pass"
  params.results = "${workflow.launchDir}/results-wink"
- params.kraken_gz = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
+ params.kraken_gz = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
  params.kraken_store = "$HOME/db/kraken"
  params.weakmem = false
  params.skip_kraken = false
@@ -151,17 +151,18 @@ if(params.kraken_gz){
 process krakenDB {
     storeDir "${params.kraken_store}"
 
-when:
-    !params.skip_kraken
-input:
-    path kraken_file from kraken_gz_ch
-output:
-    path "**", type: 'dir' into kraken_db_ch
+    when:
+        !params.skip_kraken
+    input:
+        path kraken_file from kraken_gz_ch
+    output:
+        path "**", type: 'dir' into kraken_db_ch
 
-script:
-"""
-tar -xf $kraken_file
-"""
+    script:
+    dbname = kraken_file.baseName
+    """
+    mkdir -p $dbname && tar -xf $kraken_file -C $dbname
+    """
 }
 
 Channel
@@ -174,7 +175,9 @@ Channel
     .set { watch_fastq_pass_2 }
 
 // this is now barcode, filename, file, krakendb
-kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_ch)
+// kraken_db_path solves the issue where the tar archive may be with or without a leading directory
+kraken_db_path = kraken_db_ch.flatten().last()
+kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_path)
 //kraken_ch_2.view()
 
 process kraken {
@@ -193,7 +196,7 @@ process kraken {
     
     script:
     def memory = params.weakmem ? "--memory-mapping" : ""  // use --memory-mapping to avoid loading db in ram on weak systems
-    def rlength = 200
+    def rlength = 250
     
         """
         kraken2 \
