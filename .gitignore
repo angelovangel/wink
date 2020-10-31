@@ -1,5 +1,6 @@
 testdata*
 results*
+fastq_pass*
 .nextflow*
 work*
 .pxout

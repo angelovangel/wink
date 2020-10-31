@@ -70,14 +70,14 @@ ui <- dashboardPage(title = "WINK",
 							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
 							 							checkboxInput("weakmem", "Do not load kraken2 database in RAM (use on weak machines)")
 							 							),
-							 						 column(width = 6,
+							 						 column(width = 3,
 							 						 selectizeInput("nxf_profile", 
-							 						 							 "Select nextflow profile", 
+							 						 							 "nextflow profile", 
 							 						 							 width = "100%",
 							 						 							 choices = c("docker", "conda", "local"), 
 							 						 							 selected = "docker"),
 							 						 ),
-							 						 column(width = 6,
+							 						 column(width = 3,
 							 						 		selectizeInput("taxlevel", 
 							 						 									 "Taxonomic level for kraken2 abundance", 
 							 						 									 width = "100%",
@@ -339,6 +339,7 @@ server <- function(input, output, session) {
 									 skip_kraken,
 									 weakmem,
 									 "--kraken_gz", input$kraken_gz, 
+									 "--taxlevel", input$taxlevel,
 									 nxf_profile)
 		cat("nextflow", nxf_args)
 		}

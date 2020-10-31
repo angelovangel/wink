@@ -6,6 +6,27 @@
 
 WINK is a platform for real-time phylogenetic classification and species quantification for Nanopore sequencing data, based on [kraken2]() and [bracken](https://ccb.jhu.edu/software/bracken/). It can be used both in real-time (monitor a specified folder for new reads, e.g. `fastq_pass` and continuously update results) and post-run (collect all the reads and perform analysis).<sup>[1](#footnote1)</sup> The software consists of two parts - a nextflow pipeline (can be executed on its own) and a graphical user interface (a Shiny app) which collects the output of the nextflow pipeline and diplays it as a dashboard page.
 
+## Performance
+
+The performance is that of kraken2/bracken. As an example, here are the results of a small Nanopore Flongle run (11k reads) with the Zymo HMW DNA standard.
+
+Theoretical and measured species and species abundance (in %) in the Zymo HMW DNA standard. The theoretical composition is as supplied by Zymo. 
+
+| name                   | theoretical | measured |
+|------------------------|-------------|----------|
+| Staphylococcus aureus  | 19.60       | 20.11    |
+| Enterococcus faecalis  | 18.80       | 16.28    |
+| Listeria monocytogenes | 17.80       | 14.93    |
+| Salmonella enterica    | 11.20       | 12.34    |
+| Escherichia coli       | 10.90       | 11.32    |
+| Pseudomonas aeruginosa | 7.80        | 8.63     |
+| Bacillus subtilis      | 13.20       | 7.71     |
+| Bacillus intestinalis  | NA          | 3.39     |
+| Bacillus sp. LM 4-2    | NA          | 0.53     |
+| Bacillus velezensis    | NA          | 0.52     |
+
+***
+Apart from the *Bacillus* misassignments, the species profiling and the abundance estimation are pretty good, even with this small dataset.
 ## Install
 
 ### nextflow part
