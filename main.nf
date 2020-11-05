@@ -12,12 +12,34 @@ if( !nextflow.version.matches('>=19.08') ) {
  */
  params.fastq_pass = "fastq_pass"
  params.results = "${workflow.launchDir}/results-wink"
- params.kraken_gz = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
+ params.kraken_db = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
  params.kraken_store = "$HOME/db/kraken"
  params.weakmem = false
  params.skip_kraken = false
  params.taxlevel = "S" //level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
  params.help = false
+
+/*
+assign store dir dynamically
+*/
+kraken_dbname = file("${params.kraken_db}").getSimpleName()
+// even this method exists! getSimpleName()
+curr_kraken_store = "${params.kraken_store}/${kraken_dbname}"
+println("Will use ${curr_kraken_store} as kraken_store dir")
+
+/*
+ dir to store and watch merged fastq and scratch for intermediate bracken results
+*/
+
+ latestfastqdir = file("${params.results}/latest-fastq")
+ if( !latestfastqdir.exists() ) {
+ latestfastqdir.mkdirs() // attention - mkdir() vs mkdirs(), the latter creates parents if they do not exist
+ }
+
+ scratchdir = file("${params.results}/scratch")
+ if( !scratchdir.exists() ) {
+ scratchdir.mkdirs()
+ }
 
 def helpMessage() {
 log.info """
@@ -30,7 +52,7 @@ log.info """
         -------------------------------------------
          --fastq_pass       : the folder where basecalled reads are saved during a run, must contain barcodes
          --results          : where the results will go
-         --kraken_gz        : path to kraken2 database, as tgz file (ftp or absolute path)
+         --kraken_db        : path to kraken2 database, as tgz file (ftp or absolute path)
          --kraken_store     : path to permanently store the kraken2 database, will be used in subsequent runs
          --taxlevel         : taxonomic level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
          """
@@ -52,7 +74,7 @@ log.info """
         -------------------------------------------
          --fastq_pass       : ${params.fastq_pass}
          --results          : ${params.results}
-         --kraken_gz        : ${params.kraken_gz}
+         --kraken_db        : ${params.kraken_db}
          --kraken_store     : ${params.kraken_store}
          --taxlevel         : ${params.taxlevel}
 
@@ -63,18 +85,11 @@ log.info """
          Running as user:        ${workflow.userName}
          Launch dir:             ${workflow.launchDir}
          Base dir:               ${baseDir}
+         kraken db store dir        ${curr_kraken_store}
          """
          .stripIndent()
 
-// dir to store and watch merged fastq and scratch for intermediate bracken results
- latestfastqdir = file("${params.results}/latest-fastq")
- if( !latestfastqdir.exists() ) {
- latestfastqdir.mkdirs() // attention - mkdir() vs mkdirs(), the latter creates parents if they do not exist
- }
- scratchdir = file("${params.results}/scratch")
- if( !scratchdir.exists() ) {
- scratchdir.mkdirs()
- }
+
 
 
 // used to touch the files at start so that all available fastq files are processed 
@@ -140,16 +155,16 @@ process watch {
 }
 
 
-if(params.kraken_gz){
+if(params.kraken_db){
     Channel
-        .of( "${params.kraken_gz}" )
+        .of( "${params.kraken_db}" )
         .set { kraken_gz_ch }
 } else {
         kraken_gz_ch = Channel.empty()
 }
 
-process krakenDB {
-    storeDir "${params.kraken_store}"
+process krakenDBPrep {
+    storeDir "${curr_kraken_store}"
 
     when:
         !params.skip_kraken

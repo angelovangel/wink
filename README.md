@@ -8,9 +8,9 @@ WINK is a platform for real-time phylogenetic classification and species quantif
 
 ## Performance
 
-The performance is that of kraken2/bracken. As an example, here are the results of a small Nanopore Flongle run (11k reads) with the Zymo HMW DNA standard.
+The performance is that of kraken2/bracken. As an example, here are the results of a small Nanopore Flongle run (11k reads) with the [Zymo HMW DNA standard](https://www.zymoresearch.de/collections/zymobiomics-microbial-community-standards/products/zymobiomics-hmw-dna-standard).
 
-Theoretical and measured species and species abundance (in %) in the Zymo HMW DNA standard. The theoretical composition is as supplied by Zymo. 
+Theoretical and measured species and species abundance (in %) in the Zymo HMW DNA standard. The theoretical composition is as supplied by Zymo.
 
 | name                   | theoretical | measured |
 |------------------------|-------------|----------|
@@ -25,8 +25,8 @@ Theoretical and measured species and species abundance (in %) in the Zymo HMW DN
 | Bacillus sp. LM 4-2    | NA          | 0.53     |
 | Bacillus velezensis    | NA          | 0.52     |
 
-***
 Apart from the *Bacillus* misassignments, the species profiling and the abundance estimation are pretty good, even with this small dataset.
+
 ## Install
 
 ### nextflow part

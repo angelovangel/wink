@@ -85,7 +85,7 @@ ui <- dashboardPage(title = "WINK",
 							 						 									 selected = "S")
 							 						 ),
 							 						 column(width = 6,
-							 						 selectizeInput("kraken_gz", 
+							 						 selectizeInput("kraken_db", 
 							 						 					width = "100%",
 							 						 					"Kraken2/Bracken index to use",
 							 						 					choices = 
@@ -338,7 +338,7 @@ server <- function(input, output, session) {
 									 "--fastq_pass", selectedFolder,
 									 skip_kraken,
 									 weakmem,
-									 "--kraken_gz", input$kraken_gz, 
+									 "--kraken_db", input$kraken_db, 
 									 "--taxlevel", input$taxlevel,
 									 nxf_profile)
 		cat("nextflow", nxf_args)
