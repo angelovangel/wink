@@ -10,25 +10,46 @@ params:
 ```{r, include=FALSE}
 # setup shared data object
 # all data input is from brackenData()
-require(crosstalk)
 require(dplyr)
-source("render_DT.R") # this is also, like report.Rmd, copied to a temp file in the app
-
-sd <- SharedData$new(params$brackenData)
-
+require(DT)
 ```
 
 
 
-```{r, include=TRUE, eval=TRUE}
+```{r, include=TRUE, eval=TRUE, echo=FALSE}
+
+taxdb_left = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id="
+taxdb_right = "&lvl=3&lin=f&keep=1&srchmode=1&unlock"
+
+df <- params$brackenData %>%
+	dplyr::mutate(
+				taxonomyID = paste0(taxdb_left, taxonomy_id, taxdb_right), #two-step mutate to build href
+				kraken_reads = kraken_assigned_reads,
+				bracken_corr_reads = new_est_reads, 
+				freq = round(freq*100, 2)
+				) %>% 
+	dplyr::filter(name != "unclassified") %>%
+	dplyr::mutate(
+				taxonomyID = paste0("<a target = '_blank' href='", taxonomyID, "'>", taxonomy_id, "</a>")
+				) %>%
+	dplyr::select(file, name, taxonomyID, kraken_reads, bracken_corr_reads, freq)
 
 datatable(
-  sd,
-  options = list(dom = 'Pfrtip', columnDefs = list(list(
-    searchPanes = list(show = FALSE), targets = 2:6
-  ))),
-  extensions = c('Select', 'SearchPanes'),
-  selection = 'none'
+  df,
+  escape = FALSE,
+  selection = "none",
+  caption = "Bracken abundance table",
+  filter = 'top', 
+  rownames = FALSE, 
+  class = 'hover row-border',
+  options = list(dom = 'Prtip', 
+  							 searchPanes = list(cascadePanes = TRUE),
+  							 columnDefs = list(
+  							 	list(
+  							 		searchPanes = list(show = FALSE), targets = 2:5
+  							 		)
+  							 	)),
+  extensions = c('Select', 'SearchPanes')
 )
 
 ```
