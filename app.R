@@ -9,11 +9,12 @@ require(shinydashboard)
 require(shinyFiles)
 require(shinypop) # remotes::install_github("dreamRs/shinypop")
 require(shinyjs)
-require(markdown)
+require(rmarkdown)
 require(data.table)
 require(DT)
 require(dplyr)
 require(sys) # https://github.com/jeroen/sys
+
 
 si_fmt <- function(x) { system2("bin/si-format.sh", x, stdout = TRUE) }
 
@@ -149,7 +150,8 @@ ui <- dashboardPage(title = "WINK",
 							 			infoBoxOutput("current_barcode", width = 3),
 							 			infoBoxOutput("all_reads", width = 3),
 							 			infoBoxOutput("ass_reads", width = 3),
-							 			infoBoxOutput("unass_reads", width = 3)
+							 			infoBoxOutput("unass_reads", width = 3), 
+							 			downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;")
 							 	)
 							 ),
 							 fluidRow(
@@ -570,7 +572,6 @@ server <- function(input, output, session) {
 		
 		# which is the number of the previous row now?
 		newselection <- which(brackenDataLeft()$file %in% last_selection$row_value)
-		
 		DT::datatable(brackenDataLeft(), 
 									selection = list(mode = "single", selected = newselection), #keep persistant row selection!
 									caption = HTML(paste("Top" ,tags$b(input$topn), "kraken-assigned species per sample (click on a row for more info)")),
@@ -647,6 +648,36 @@ server <- function(input, output, session) {
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right')
 	})
+	
+	#
+	# generate and download rmarkdown report ------------------------------
+	#
+	output$download_rmarkdown <- downloadHandler(
+		
+		filename = "report.html",
+		content = function(file) {
+			# Copy the report file to a temporary directory before processing it, in
+			# case we don't have write permissions to the current working dir 
+			tempReport <- file.path(tempdir(), "report.Rmd")
+			file.copy("report.Rmd", tempReport, overwrite = TRUE)
+			
+			# Set up parameters to pass to Rmd document
+			params <- list(n = input$topn, 
+										 brackenData = brackenData()
+										 )
+			
+			# Knit the document, passing in the `params` list, and eval it in a
+			# child of the global environment (this isolates the code in the document
+			# from the code in this app).
+			rmarkdown::render(tempReport, output_file = file,
+												params = params,
+												envir = new.env(parent = globalenv())
+			)
+		}
+	)
+	#
+	# generate and download rmarkdown report ------------------------------
+	#
 	
 	session$onSessionEnded(function() {
 		isolate( tools::pskill(nxf$watch) )

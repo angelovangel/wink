@@ -1,0 +1,34 @@
+---
+title: "WINK taxonomic report"
+output: 
+  html_document
+params:
+  n: NA
+  brackenData: NA
+---
+
+```{r, include=FALSE}
+# setup shared data object
+# all data input is from brackenData()
+require(crosstalk)
+require(dplyr)
+source("render_DT.R") # this is also, like report.Rmd, copied to a temp file in the app
+
+sd <- SharedData$new(params$brackenData)
+
+```
+
+
+
+```{r, include=TRUE, eval=TRUE}
+
+datatable(
+  sd,
+  options = list(dom = 'Pfrtip', columnDefs = list(list(
+    searchPanes = list(show = FALSE), targets = 2:6
+  ))),
+  extensions = c('Select', 'SearchPanes'),
+  selection = 'none'
+)
+
+```

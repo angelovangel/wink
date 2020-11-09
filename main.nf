@@ -85,7 +85,7 @@ log.info """
          Running as user:        ${workflow.userName}
          Launch dir:             ${workflow.launchDir}
          Base dir:               ${baseDir}
-         kraken db store dir        ${curr_kraken_store}
+         kraken db store dir     ${curr_kraken_store}
          """
          .stripIndent()
 
