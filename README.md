@@ -12,6 +12,12 @@ The performance is that of kraken2/bracken. As an example, here are the results 
 
 Theoretical and measured species and species abundance (in %) in the Zymo HMW DNA standard. The theoretical composition is as supplied by Zymo.
 
+<style>
+table {
+    width:60%;
+}
+</style>
+
 | name                   | theoretical | measured |
 |------------------------|-------------|----------|
 | Staphylococcus aureus  | 19.60       | 20.11    |
@@ -31,24 +37,24 @@ Apart from the *Bacillus* misassignments, the species profiling and the abundanc
 
 ### nextflow part
 
-- If you don't have nextflow: 
+-   If you don't have nextflow:
 
-```bash
+``` {.bash}
 curl -s https://get.nextflow.io | bash
 ```
 
-- get the latest WINK version from github:
+-   get the latest WINK version from github:
 
-```bash
+``` {.bash}
 git clone https://github.com/angelovangel/wink.git
 ```
 
 The nextflow pipeline can be run with docker or conda (e.g. use `--profile docker`), in which case you don't need to manually install the dependencies. These are:
 
-- `seqkit`
-- `kraken2`
-- `bracken`
-- `R`
+-   `seqkit`
+-   `kraken2`
+-   `bracken`
+-   `R`
 
 The results from the nextflow pipeline are by default saved in `results-wink` in the nextflow launch directory.
 
@@ -62,15 +68,14 @@ WINK can be run either via the Shiny app (in a browser, no command line needed),
 
 The input for the pipeline is one of:
 
-- the output folder of the MinKNOW software (usually this is the `fastq_pass` folder) or 
-- any other folder where the basecalled data (fastq files) accumulates during a run.
-*The run may be barcoded or not*
+-   the output folder of the MinKNOW software (usually this is the `fastq_pass` folder) or
+-   any other folder where the basecalled data (fastq files) accumulates during a run. *The run may be barcoded or not*
 
 The results can be monitored in real time via the app. In addition, the nextflow pipeline outputs in real-time (all in `results-wink`):
 
-- `latest-fastq` - where the `latest` fastq files are collected, one file per sample. By default, the MinKNOW software writes 4k reads per fastq file and typically one sample can generate many such fastq files. The WINK pipeline merges all the available fastq files belonging to one sample, i.e.
+-   `latest-fastq` - where the `latest` fastq files are collected, one file per sample. By default, the MinKNOW software writes 4k reads per fastq file and typically one sample can generate many such fastq files. The WINK pipeline merges all the available fastq files belonging to one sample, i.e.
 
-```bash
+``` {.bash}
 data
 ├── barcode01
 │   ├── PAE58908_pass_barcode01_d2c5c063_0.fastq
@@ -80,17 +85,15 @@ data
 
 becomes `barcode01.fastq`. The `latest-fastq` is continously updated as new reads are generated.
 
-- `latest-stats` - tables (one per sample/barcode) with the following columns:
-`format type num_seqs sum_len min_len avg_len max_len Q1 Q2 Q3 sum_gap N50 Q20(%) Q30(%)`. These are also continuously updated.
+-   `latest-stats` - tables (one per sample/barcode) with the following columns: `format type num_seqs sum_len min_len avg_len max_len Q1 Q2 Q3 sum_gap N50 Q20(%) Q30(%)`. These are also continuously updated.
 
-- `latest-bracken`- a table with the bracken quantification of species abundance in the samples with the following columns:
-`file name taxonomy_id kraken_assigned_reads new_est_reads freq`
+-   `latest-bracken`- a table with the bracken quantification of species abundance in the samples with the following columns: `file name taxonomy_id kraken_assigned_reads new_est_reads freq`
 
 ## Under the hood
 
 The pipeline is built with [nextflow](https://www.nextflow.io/) and [Shiny](https://shiny.rstudio.com/), using some [built-in nextflow functions](https://www.nextflow.io/docs/latest/channel.html#watchpath) to watch for new reads in the input folder. As new reads are generated, their phylogenetic assignment is performed with kraken2 and the relative species composition is determined with bracken. In parallel, various statistics about the fastq reads are collected and updated during the run.
 
-***
+------------------------------------------------------------------------
 
 <a name="footnote1">1</a>: The reads generated *before* the pipeline is started are also included in the analysis by changing their timestamps. Take care if you rely on this information for other purposes.
 

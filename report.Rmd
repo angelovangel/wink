@@ -13,6 +13,8 @@ params:
 
 *Generated with the [WINK analysis pipeline](https://github.com/angelovangel/wink.git) on `r Sys.time()`*
 
+#### Run and taxonomic assignment summary
+
 |                |  |
 |----------------|--|
 | Total barcodes: | `r params$total_barcodes` |
@@ -28,6 +30,8 @@ params:
 require(dplyr)
 require(DT)
 ```
+
+#### Taxonomic assignments and abundance estimation per sample
 
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
 
