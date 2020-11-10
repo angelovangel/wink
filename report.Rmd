@@ -63,8 +63,11 @@ datatable(
   							 searchPanes = list(cascadePanes = TRUE),
   							 columnDefs = list(
   							 	list(
+  							 		searchPanes = list(show = TRUE), targets = 0:1
+  							 		),
+  							 	list(
   							 		searchPanes = list(show = FALSE), targets = 2:5
-  							 		)
+  							 	)
   							 	)),
   extensions = c('Select', 'SearchPanes')
 )
