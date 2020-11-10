@@ -5,7 +5,22 @@ output:
 params:
   n: NA
   brackenData: NA
+  total_barcodes: NA
+  total_reads: NA
+  ass_reads: NA
+  run_time: NA
 ---
+
+*Generated with the [WINK analysis pipeline](https://github.com/angelovangel/wink.git) on `r Sys.time()`*
+
+|                |  |
+|----------------|--|
+| Total barcodes: | `r params$total_barcodes` |
+|    Total reads: | `r params$total_reads` |
+| Assigned reads: | `r params$ass_reads` |
+|       Run time: | `r params$run_time` |
+
+
 
 ```{r, include=FALSE}
 # setup shared data object
@@ -13,8 +28,6 @@ params:
 require(dplyr)
 require(DT)
 ```
-
-
 
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
 

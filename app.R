@@ -663,7 +663,11 @@ server <- function(input, output, session) {
 			
 			# Set up parameters to pass to Rmd document
 			params <- list(n = input$topn, 
-										 brackenData = brackenData()
+										 brackenData = brackenData(),
+										 total_barcodes = seqData$nsamples,
+										 total_reads = sum( statsData()$num_seqs, na.rm = T),
+										 ass_reads = sum( brackenData()$kraken_assigned_reads, na.rm = T),
+										 run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
 										 )
 			
 			# Knit the document, passing in the `params` list, and eval it in a
