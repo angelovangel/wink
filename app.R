@@ -25,30 +25,22 @@ ui <- dashboardPage(title = "WINK",
 									), 
 	dashboardSidebar(disable = TRUE),
 	
-	# 		shinyWidgets::sliderTextInput(
-	# 			"abundfilter",
-	# 			"Filter by abundance",
-	# 			choices = c(0, 0.1, 1, 10, 20),
-	# 			selected = 0,
-	# 			post = "%",
-	# 			grid = TRUE
-	# 		)
-	# 	)
-	# ),
 	dashboardBody(
-		includeCSS("custom.css"),
+		tags$head(
+			tags$style(HTML("
+			.yellow {
+				background-color: #F4D03F;
+				}
+			.red {
+			color: red;
+			}
+						 "))
+		),
+		#includeCSS("custom.css"),
 		useShinyjs(),
 		#useShinyalert(),
 		use_notiflix_notify(position = "right-top", width = "380px"),
 		
-# 		tags$head(tags$style(HTML('
-#         .skin-blue .main-header .logo {
-#           background-color: light-blue;
-#         }
-#         .skin-blue .main-header .logo:hover {
-#           background-color: light-blue;
-#         }
-#       '))),
 		tabsetPanel(
 			tabPanel("Sequencing overview", #--------------------------------------------------------------
 							 fluidRow(
