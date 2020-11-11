@@ -242,7 +242,7 @@ Channel
             def barcodedir = file.getParent()
             return tuple(barcode, barcodedir)
      }
-    .set { combine_ch }
+    .set { combine_ch } // use unique() on this channel??
 //combine_ch.view()
 
 process combine {
