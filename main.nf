@@ -238,10 +238,10 @@ process kraken {
 
 
 Channel
-    .watchPath("${scratchdir}/**.tsv", 'create,modify')
-    .map { file -> 
-            def barcode = file.getParent().getFileName()
-            def barcodedir = file.getParent()
+    .watchPath("${scratchdir}/*", 'create,modify') // simple, just watch for directory change, mtime updates when new files are written
+    .map { n -> 
+            def barcode = n.getFileName()
+            def barcodedir = n
             return tuple(barcode, barcodedir)
      }
      //.unique() // can not use unique() here, because it will execute once per barcode and then stop
