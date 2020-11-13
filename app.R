@@ -59,7 +59,7 @@ ui <- dashboardPage(title = "WINK",
 							 		actionButton("more", "More options", style = "color: #3498DB;", icon = icon("cog"), class = "rightAlign"),
 							 		tags$div(id = "optional_inputs",
 							 						 column(width = 12,
-							 							checkboxInput("testrun", "Simulate run with test data", width = "100%"),
+							 							#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
 							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
 							 							checkboxInput("weakmem", "Do not load kraken2 database in RAM (use on weak machines)")
 							 							),

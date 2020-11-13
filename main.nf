@@ -55,6 +55,8 @@ log.info """
          --kraken_db        : path to kraken2 database, as tgz file (ftp or absolute path)
          --kraken_store     : path to permanently store the kraken2 database, will be used in subsequent runs
          --taxlevel         : taxonomic level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
+         --weakmem          : do not load database in memory, use on weak machines
+         --skip_kraken      : skip kraken2 classification, just run statistics
          """
          .stripIndent()
 }
@@ -242,8 +244,10 @@ Channel
             def barcodedir = file.getParent()
             return tuple(barcode, barcodedir)
      }
-    .set { combine_ch } // use unique() on this channel??
-//combine_ch.view()
+     //.unique() // can not use unique() here, because it will execute once per barcode and then stop
+     // distinct() works, but dangerous (if only one sample!), what about interleave with a fake?
+    .set { combine_ch } 
+    //combine_ch.view()
 
 process combine {
     tag "working on: ${barcode}"
