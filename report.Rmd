@@ -5,11 +5,16 @@ output:
 params:
   n: NA
   brackenData: NA
+  filter_used: NA
   total_barcodes: NA
   total_reads: NA
   ass_reads: NA
   run_time: NA
 ---
+
+<style>
+div.blue { background-color:#e6f0ff;}
+</style>
 
 *Generated with the [WINK analysis pipeline](https://github.com/angelovangel/wink.git) on `r Sys.time()`*
 
@@ -32,6 +37,10 @@ require(DT)
 ```
 
 #### Taxonomic assignments and abundance estimation per sample
+
+<div class = "blue">
+The abundance data has been filtered at `r params$filter_used`%.
+</div>
 
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
 

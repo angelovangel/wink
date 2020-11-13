@@ -143,7 +143,8 @@ ui <- dashboardPage(title = "WINK",
 							 			infoBoxOutput("all_reads", width = 3),
 							 			infoBoxOutput("ass_reads", width = 3),
 							 			infoBoxOutput("unass_reads", width = 3), 
-							 			downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;")
+							 			downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;"),
+							 			tags$a("Only data filtered by abundance will be exported")
 							 	)
 							 ),
 							 fluidRow(
@@ -655,7 +656,8 @@ server <- function(input, output, session) {
 			
 			# Set up parameters to pass to Rmd document
 			params <- list(n = input$topn, 
-										 brackenData = brackenData(),
+										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
+										 filter_used = input$filterFreq,
 										 total_barcodes = seqData$nsamples,
 										 total_reads = sum( statsData()$num_seqs, na.rm = T),
 										 ass_reads = sum( brackenData()$kraken_assigned_reads, na.rm = T),
