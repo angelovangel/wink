@@ -3,11 +3,12 @@ title: "WINK taxonomic report"
 output: 
   html_document
 params:
-  n: NA
+  n50: NA
   brackenData: NA
   filter_used: NA
   total_barcodes: NA
   total_reads: NA
+  total_bases: NA
   ass_reads: NA
   run_time: NA
 ---
@@ -18,14 +19,17 @@ div.blue { background-color:#e6f0ff;}
 
 *Generated with the [WINK analysis pipeline](https://github.com/angelovangel/wink.git) on `r Sys.time()`*
 
-#### Run and taxonomic assignment summary
+<div class = "blue">
+#### Sequencing data and taxonomic assignment summary
+</div>
 
 |                |  |
 |----------------|--|
-| Total barcodes: | `r params$total_barcodes` |
-|    Total reads: | `r params$total_reads` |
-| Assigned reads: | `r params$ass_reads` |
-|       Run time: | `r params$run_time` |
+| Detected barcodes:    | `r params$total_barcodes` |
+| Total bases:          | `r params$total_bases` |
+| Total reads:          | `r params$total_reads` |
+| Total assigned reads: | `r params$ass_reads` |
+| Run time:             | `r params$run_time` |
 
 
 
@@ -36,10 +40,9 @@ require(dplyr)
 require(DT)
 ```
 
-#### Taxonomic assignments and abundance estimation per sample
-
 <div class = "blue">
-The abundance data has been filtered at `r params$filter_used`%.
+#### Taxonomic assignments and abundance estimation per sample
+The abundance data has been filtered at **`r params$filter_used`%**.
 </div>
 
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
@@ -54,7 +57,7 @@ df <- params$brackenData %>%
 				bracken_corr_reads = new_est_reads, 
 				freq = round(freq*100, 2)
 				) %>% 
-	dplyr::filter(name != "unclassified") %>%
+	#dplyr::filter(name != "unclassified") %>%
 	dplyr::mutate(
 				taxonomyID = paste0("<a target = '_blank' href='", taxonomyID, "'>", taxonomy_id, "</a>")
 				) %>%
@@ -69,6 +72,7 @@ datatable(
   rownames = FALSE, 
   class = 'hover row-border',
   options = list(dom = 'Prtip', 
+  							 buttons = c('copy', 'csv', 'excel'),
   							 searchPanes = list(cascadePanes = TRUE),
   							 columnDefs = list(
   							 	list(
@@ -78,7 +82,7 @@ datatable(
   							 		searchPanes = list(show = FALSE), targets = 2:5
   							 	)
   							 	)),
-  extensions = c('Select', 'SearchPanes')
+  extensions = c('Select', 'SearchPanes', 'Buttons')
 )
 
 ```

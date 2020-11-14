@@ -275,8 +275,8 @@ server <- function(input, output, session) {
 	# this is the summary table, one row per barcode
 	brackenDataLeft <- reactive({
 		brackenData() %>% 
-		dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
-		mutate(freq = round(freq, 3)) %>%
+		#dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
+		#mutate(freq = round(freq, 3)) %>%
 		group_by(file) %>%
 		slice_head(n = input$topn) %>%
 		summarize( across("name", .fns = paste, collapse = " | "), 
@@ -301,7 +301,7 @@ server <- function(input, output, session) {
 		seqData$nsamples <- nrow( statsData() )
 		seqData$treads <- si_fmt( sum(statsData()$num_seqs, na.rm = TRUE) )
 		seqData$tbases <- si_fmt( sum(statsData()$sum_len, na.rm = TRUE) )
-		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE)
+		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE) 
 		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) ) # use asPOSIXct here!
 		nxflog <- nxf_logfile_data()
 		nxf$status <- ifelse(length( nxflog ) == 1, 
@@ -519,7 +519,7 @@ server <- function(input, output, session) {
 										 0, 
 										 paste(krakenData$assigned_reads, 
 										"(", 
-										round(krakenData$assigned_reads/sum(krakenData$assigned_reads, krakenData$unassigned_reads)*100, 0),
+										round(krakenData$assigned_reads/krakenData$all_reads * 100, 0),
 										"%)"
 										)
 							),
@@ -536,7 +536,7 @@ server <- function(input, output, session) {
 											 0, 
 											 paste(krakenData$unassigned_reads, 
 											 			"(", 
-											 			round(krakenData$unassigned_reads/sum(krakenData$assigned_reads, krakenData$unassigned_reads)*100, 0),
+											 			round(krakenData$unassigned_reads/krakenData$all_reads * 100, 0),
 											 			"%)"
 											 )
 				),
@@ -567,7 +567,7 @@ server <- function(input, output, session) {
 		newselection <- which(brackenDataLeft()$file %in% last_selection$row_value)
 		DT::datatable(brackenDataLeft(), 
 									selection = list(mode = "single", selected = newselection), #keep persistant row selection!
-									caption = HTML(paste("Top" ,tags$b(input$topn), "kraken-assigned species per sample (click on a row for more info)")),
+									caption = HTML(paste("Top" ,tags$b(input$topn), "kraken-assigned species per sample and # of reads assigned to them (click on a row for more info)")),
 									#filter = 'top',
 									extensions = 'Buttons', 
 									options = list(dom = 'Btp', 
@@ -589,28 +589,28 @@ server <- function(input, output, session) {
 		
 		# use the row value reactive to filter
 		df_assigned <- brackenData() %>% 
-			dplyr::filter(file == last_selection$row_value, name != "unclassified") %>%
+			dplyr::filter(file == last_selection$row_value) %>% #name != "unclassified") %>%
 			
 			dplyr::mutate(
 				taxonomyID = paste0(taxdb_left, taxonomy_id, taxdb_right), #two-step mutate to build href
 				kraken_reads = kraken_assigned_reads,
 				bracken_corr_reads = new_est_reads, 
-				freq = round(freq*100, 2)
+				bracken_freq = round(freq*100, 2)
 				) %>% 
 			dplyr::mutate(
 				taxonomyID = paste0("<a target = '_blank' href='", taxonomyID, "'>", taxonomy_id, "</a>")
 				) %>%
 			
-			dplyr::select(name, taxonomyID, kraken_reads, bracken_corr_reads, freq) %>%
-			dplyr::filter(freq >= input$filterFreq)
+			dplyr::select(name, taxonomyID, kraken_reads, bracken_corr_reads, bracken_freq) %>%
+			dplyr::filter(bracken_freq >= input$filterFreq)
 		
 		df_unassigned <- brackenData() %>% 
 			dplyr::filter(file == last_selection$row_value, name == "unclassified")
 		
 		# set kraken statistics for value box
-		krakenData$assigned_reads = sum( df_assigned$kraken_reads )
-		krakenData$unassigned_reads = sum( df_unassigned$kraken_assigned_reads)
-		krakenData$all_reads = sum(df_assigned$kraken_reads, df_unassigned$kraken_assigned_reads)
+		krakenData$assigned_reads = sum(df_assigned$kraken_reads, na.rm = TRUE)
+		krakenData$unassigned_reads = sum(df_unassigned$kraken_assigned_reads, na.rm = TRUE)
+		krakenData$all_reads = sum(df_assigned$kraken_reads, df_unassigned$kraken_assigned_reads, na.rm = TRUE)
 		
 		caption <- if_else(is.na(last_selection$row_value), "Select a sample from the table on the left", 
 											 paste("Bracken abundance table for", tags$b(last_selection$row_value)))
@@ -625,7 +625,7 @@ server <- function(input, output, session) {
 																 buttons = c('copy', 'csv', 'excel')
 									), 
 									rownames = FALSE, class = 'hover row-border') %>%
-		DT::formatStyle('freq',
+		DT::formatStyle('bracken_freq',
 										background = styleColorBar(c(0, 100), 'skyblue'),
 										backgroundSize = '95% 70%',
 										backgroundRepeat = 'no-repeat',
@@ -655,12 +655,14 @@ server <- function(input, output, session) {
 			file.copy("report.Rmd", tempReport, overwrite = TRUE)
 			
 			# Set up parameters to pass to Rmd document
-			params <- list(n = input$topn, 
+			params <- list(
+										 n50 = seqData$n50,
 										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
 										 filter_used = input$filterFreq,
 										 total_barcodes = seqData$nsamples,
-										 total_reads = sum( statsData()$num_seqs, na.rm = T),
-										 ass_reads = sum( brackenData()$kraken_assigned_reads, na.rm = T),
+										 total_bases = seqData$tbases,
+										 total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
+										 ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
 										 run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
 										 )
 			
