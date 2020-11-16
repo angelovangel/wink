@@ -4,6 +4,7 @@ output:
   html_document
 params:
   n50: NA
+  statsData: NA
   brackenData: NA
   filter_used: NA
   total_barcodes: NA
@@ -13,6 +14,12 @@ params:
   run_time: NA
 ---
 
+```{r, include=FALSE}
+# 
+require(dplyr)
+require(DT)
+```
+
 <style>
 div.blue { background-color:#e6f0ff;}
 </style>
@@ -20,7 +27,7 @@ div.blue { background-color:#e6f0ff;}
 *Generated with the [WINK analysis pipeline](https://github.com/angelovangel/wink.git) on `r Sys.time()`*
 
 <div class = "blue">
-#### Sequencing data and taxonomic assignment summary
+#### Run summary
 </div>
 
 |                |  |
@@ -29,15 +36,29 @@ div.blue { background-color:#e6f0ff;}
 | Total bases:          | `r params$total_bases` |
 | Total reads:          | `r params$total_reads` |
 | Total assigned reads: | `r params$ass_reads` |
+| Mean N50:              | `r as.integer(params$n50)` |
 | Run time:             | `r params$run_time` |
 
 
+<div class = "blue">
+#### Sequence data per sample
+</div>
 
-```{r, include=FALSE}
-# setup shared data object
-# all data input is from brackenData()
-require(dplyr)
-require(DT)
+```{r, include=TRUE, eval=TRUE, echo=FALSE}
+df <- params$statsData %>% 
+			dplyr::mutate(file = basename(tools::file_path_sans_ext(file)),
+										bases = sum_len) %>%
+										#bases_h = si_fmt(bases)) %>%
+			dplyr::select(file, num_seqs, bases, min_len, max_len, N50, Q20_perc)
+		
+datatable(df, filter = 'top',
+					extensions = 'Buttons', 
+					options = list(dom = 'Btp', 
+															 buttons = c('copy', 'csv', 'excel')
+															 ), 
+					rownames = FALSE, 
+					class = 'hover row-border')
+
 ```
 
 <div class = "blue">
@@ -48,7 +69,7 @@ The abundance data has been filtered at **`r params$filter_used`%**.
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
 
 taxdb_left = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id="
-taxdb_right = "&lvl=3&lin=f&keep=1&srchmode=1&unlock"
+taxdb_right = "&lvl=1&lin=s"
 
 df <- params$brackenData %>%
 	dplyr::mutate(
@@ -71,6 +92,7 @@ datatable(
   filter = 'top', 
   rownames = FALSE, 
   class = 'hover row-border',
+  extensions = c('Buttons','Select', 'SearchPanes'),
   options = list(dom = 'Prtip', 
   							 buttons = c('copy', 'csv', 'excel'),
   							 searchPanes = list(cascadePanes = TRUE),
@@ -81,8 +103,7 @@ datatable(
   							 	list(
   							 		searchPanes = list(show = FALSE), targets = 2:5
   							 	)
-  							 	)),
-  extensions = c('Select', 'SearchPanes', 'Buttons')
+  							 	))
 )
 
 ```

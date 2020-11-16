@@ -18,157 +18,238 @@ require(sys) # https://github.com/jeroen/sys
 
 si_fmt <- function(x) { system2("bin/si-format.sh", x, stdout = TRUE) }
 
-ui <- dashboardPage(title = "WINK",
-	dashboardHeader(title = "WINK - What's In my Nanopore reads, with Kraken2, in real-time", 
-									titleWidth = '100%', 
-									dropdownMenuOutput("notificationsMenu")
-									), 
+ui <- dashboardPage(
+	title = "WINK",
+	dashboardHeader(
+		title = "WINK - What's In my Nanopore reads, with Kraken2, in real-time",
+		titleWidth = '100%',
+		dropdownMenuOutput("notificationsMenu")
+	),
 	dashboardSidebar(disable = TRUE),
 	
 	dashboardBody(
-		tags$head(
-			tags$style(HTML("
+		tags$head(tags$style(
+			HTML("
 			.yellow {
 				background-color: #F4D03F;
 				}
 			.red {
 			color: red;
 			}
-						 "))
-		),
+						 ")
+		)),
 		#includeCSS("custom.css"),
 		useShinyjs(),
 		#useShinyalert(),
 		use_notiflix_notify(position = "right-top", width = "380px"),
 		
 		tabsetPanel(
-			tabPanel("Sequencing overview", #--------------------------------------------------------------
-							 fluidRow(
-							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE, 
-							 			title = "Control panel",
-							 		
-							 		shinyDirButton(id = "fastq_pass_folder", 
-							 									 label = "Select fastq_pass folder", 
-							 									 title = "Select the fastq_pass folder",
-							 									 style = "color: #3498DB;",
-							 									 #color = "primary", 
-							 									 icon = icon("folder-open")),
-							 		actionButton("reset", "Reset", style = "color: #3498DB;", icon = icon("sync"), onclick = "history.go(0);"),
-							 		actionButton("run", "Start WINK", style = "color: #3498DB;", icon = icon("play")),
-							 		actionButton("stop", "Stop WINK", style = "color: #3498DB;", icon = icon("power-off")),
-							 		actionButton("more", "More options", style = "color: #3498DB;", icon = icon("cog"), class = "rightAlign"),
-							 		tags$div(id = "optional_inputs",
-							 						 column(width = 12,
-							 							#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
-							 							checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
-							 							checkboxInput("weakmem", "Do not load kraken2 database in RAM (use on weak machines)")
-							 							),
-							 						 column(width = 3,
-							 						 selectizeInput("nxf_profile", 
-							 						 							 "nextflow profile", 
-							 						 							 width = "100%",
-							 						 							 choices = c("docker", "conda", "local"), 
-							 						 							 selected = "docker"),
-							 						 ),
-							 						 column(width = 3,
-							 						 		selectizeInput("taxlevel", 
-							 						 									 "Taxonomic level for kraken2 abundance", 
-							 						 									 width = "100%",
-							 						 									 choices = c("Domain" = "D", "Phylum" = "P", "Class" = "C", "Order" = "O", "Family" = "F", "Genus" = "G", "Species" = "S"), 
-							 						 									 selected = "S")
-							 						 ),
-							 						 column(width = 6,
-							 						 selectizeInput("kraken_db", 
-							 						 					width = "100%",
-							 						 					"Kraken2/Bracken index to use",
-							 						 					choices = 
-							 						 						list(
-							 						 							"Standard indexes" = 
-							 						 								c(
-							 						 									"MinusB | archaea, viral, plasmid, human, UniVec_Core | 7.3 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_minusb_20200919.tar.gz",
-							 						 									"Standard | archaea, bacteria, viral, plasmid, human, UniVec_Core | 47 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20200919.tar.gz",
-							 						 									"Standard-8 | Standard with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz",
-							 						 									"Standard-16 | Standard with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_16gb_20200919.tar.gz",
-							 						 									"PlusPF | Standard plus protozoa & fungi | 48 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_20200919.tar.gz",
-							 						 									"PlusPF-8 | PlusPF with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_8gb_20200919.tar.gz",
-							 						 									"PlusPF-16 | PlusPF with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_16gb_20200919.tar.gz",
-							 						 									"PlusPFP | Standard plus protozoa, fungi & plant | 90 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_20200919.tar.gz",
-							 						 									"PlusPFP-8 | PlusPFP with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_8gb_20200919.tar.gz",
-							 						 									"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz"
-							 						 								), 
-							 						 							"Minikraken indexes" = c(
-							 						 								"Minikraken v1 | Refseq: bacteria, archaea, viral | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v1_8GB_201904.tgz",
-							 						 								"Minikraken v2 | Refseq: bacteria, archaea, viral, human* | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
-							 						 							),
-							 						 							"16S indexes" = c(
-							 						 								"Greengenes 13.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Greengenes13.5_20200326.tgz",
-							 						 								"RDP 11.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_RDP11.5_20200326.tgz",
-							 						 								"Silva 132" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva132_20200326.tgz",
-							 						 								"Silva 138" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva138_20200326.tgz"
-							 						 							)
-							 						 						),
-							 						 					selected = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz")
-							 						 )
-							 		),
-							 		tags$hr(),
-							 		column(widt = 12,
-							 			verbatimTextOutput("stdout"),
-							 			verbatimTextOutput("log_output")
-							 		)
-							 	)
-							 ),
-							 fluidRow(
-							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE,
-							 			title = "Run statistics",
-							 	valueBoxOutput("nsamples", width = 3),
-							 	valueBoxOutput("treads", width = 2),
-							 	valueBoxOutput("tbases", width = 2),
-							 	valueBoxOutput("n50", width = 2),
-							 	valueBoxOutput("runtime", width = 3)
+			tabPanel(
+				"Sequencing overview",
+				#--------------------------------------------------------------
+				fluidRow(
+					box(
+						width = 12,
+						status = "warning",
+						solidHeader = FALSE,
+						collapsible = TRUE,
+						title = "Control panel",
+						
+						shinyDirButton(
+							id = "fastq_pass_folder",
+							label = "Select fastq_pass folder",
+							title = "Select the fastq_pass folder",
+							style = "color: #3498DB;",
+							#color = "primary",
+							icon = icon("folder-open")
+						),
+						actionButton(
+							"reset",
+							"Reset",
+							style = "color: #3498DB;",
+							icon = icon("sync"),
+							onclick = "history.go(0);"
+						),
+						actionButton("run", "Start WINK", style = "color: #3498DB;", icon = icon("play")),
+						actionButton(
+							"stop",
+							"Stop WINK",
+							style = "color: #3498DB;",
+							icon = icon("power-off")
+						),
+						actionButton(
+							"more",
+							"More options",
+							style = "color: #3498DB;",
+							icon = icon("cog"),
+							class = "rightAlign"
+						),
+						tags$div(
+							id = "optional_inputs",
+							column(
+								width = 12,
+								#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
+								checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
+								checkboxInput(
+									"weakmem",
+									"Do not load kraken2 database in RAM (use on weak machines)"
 								)
-							 ),
-							 fluidRow(
-							 	box(width = 12, 
-							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
-							 			title = "Run statistics per sample",
-							 			DT::dataTableOutput("stats", width = "100%", height = 500)
-							 	)
-							 )
-			),#---------------------------------------------------------------
+							),
+							column(
+								width = 3,
+								selectizeInput(
+									"nxf_profile",
+									"nextflow profile",
+									width = "100%",
+									choices = c("docker", "conda", "local"),
+									selected = "docker"
+								),
+							),
+							column(
+								width = 3,
+								selectizeInput(
+									"taxlevel",
+									"Taxonomic level for kraken2 abundance",
+									width = "100%",
+									choices = c(
+										"Domain" = "D",
+										"Phylum" = "P",
+										"Class" = "C",
+										"Order" = "O",
+										"Family" = "F",
+										"Genus" = "G",
+										"Species" = "S"
+									),
+									selected = "S"
+								)
+							),
+							column(
+								width = 6,
+								selectizeInput(
+									"kraken_db",
+									width = "100%",
+									"Kraken2/Bracken index to use",
+									choices =
+										list(
+											"Standard indexes" =
+												c(
+													"MinusB | archaea, viral, plasmid, human, UniVec_Core | 7.3 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_minusb_20200919.tar.gz",
+													"Standard | archaea, bacteria, viral, plasmid, human, UniVec_Core | 47 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20200919.tar.gz",
+													"Standard-8 | Standard with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz",
+													"Standard-16 | Standard with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_16gb_20200919.tar.gz",
+													"PlusPF | Standard plus protozoa & fungi | 48 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_20200919.tar.gz",
+													"PlusPF-8 | PlusPF with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_8gb_20200919.tar.gz",
+													"PlusPF-16 | PlusPF with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_16gb_20200919.tar.gz",
+													"PlusPFP | Standard plus protozoa, fungi & plant | 90 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_20200919.tar.gz",
+													"PlusPFP-8 | PlusPFP with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_8gb_20200919.tar.gz",
+													"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz"
+												),
+											"Minikraken indexes" = c(
+												"Minikraken v1 | Refseq: bacteria, archaea, viral | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v1_8GB_201904.tgz",
+												"Minikraken v2 | Refseq: bacteria, archaea, viral, human* | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
+											),
+											"16S indexes" = c(
+												"Greengenes 13.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Greengenes13.5_20200326.tgz",
+												"RDP 11.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_RDP11.5_20200326.tgz",
+												"Silva 132" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva132_20200326.tgz",
+												"Silva 138" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva138_20200326.tgz"
+											)
+										),
+									selected = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
+								)
+							)
+						),
+						tags$hr(),
+						column(
+							widt = 12,
+							verbatimTextOutput("stdout"),
+							verbatimTextOutput("log_output")
+						)
+					)
+				),
+				fluidRow(
+					box(
+						width = 12,
+						status = "warning",
+						solidHeader = FALSE,
+						collapsible = TRUE,
+						title = "Run statistics",
+						valueBoxOutput("nsamples", width = 3),
+						valueBoxOutput("treads", width = 2),
+						valueBoxOutput("tbases", width = 2),
+						valueBoxOutput("n50", width = 2),
+						valueBoxOutput("runtime", width = 3)
+					)
+				),
+				fluidRow(
+					box(
+						width = 12,
+						status = "warning",
+						solidHeader = FALSE,
+						collapsible = TRUE,
+						collapsed = FALSE,
+						title = "Run statistics per sample",
+						DT::dataTableOutput("stats", width = "100%", height = 500)
+					)
+				)
+			),
+			#---------------------------------------------------------------
 			tabPanel("Taxonomy and abundance", #-----------------------------
 							 fluidRow(
-							 	box(width = 12, status = "warning", solidHeader = FALSE, collapsible = TRUE,
-							 			title = "Kraken read assignment per sample",
-							 			infoBoxOutput("current_barcode", width = 3),
-							 			infoBoxOutput("all_reads", width = 3),
-							 			infoBoxOutput("ass_reads", width = 3),
-							 			infoBoxOutput("unass_reads", width = 3), 
-							 			downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;"),
-							 			tags$a("Only data filtered by abundance will be exported")
+							 	box(
+							 		width = 12,
+							 		status = "warning",
+							 		solidHeader = FALSE,
+							 		collapsible = TRUE,
+							 		title = "Kraken read assignment per sample",
+							 		infoBoxOutput("current_barcode", width = 3),
+							 		infoBoxOutput("all_reads", width = 3),
+							 		infoBoxOutput("ass_reads", width = 3),
+							 		infoBoxOutput("unass_reads", width = 3),
+							 		downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;"),
+							 		tags$a("Only data filtered by abundance will be exported")
 							 	)
 							 ),
 							 fluidRow(
-							 	box(width = 6, 
-							 			status = "warning", solidHeader = FALSE, collapsible = TRUE,collapsed = FALSE,
-							 			title = "Bracken results per sample", 
-							 			sliderInput("topn", "Top N species to show", value = 3, min = 1, max = 5, step = 1),
-							 			DT::dataTableOutput("ab_table", width = "100%", height = 500)
-							 			),
-							 	box(width = 6,
-							 			status = "warning", solidHeader = FALSE, collapsible = TRUE, collapsed = FALSE,
-							 			title = "Detailed bracken results",
-							 			shinyWidgets::sliderTextInput("filterFreq", 
-							 																		"Filter by abundance", 
-							 																		choices = c(0, 0.1, 1, 5, 10, 20), 
-							 																		selected = 0,
-							 																		post = "%", grid = TRUE),
-							 			#sliderInput("filterFreq", "Filter by abundance", min = 0, max = 1, value = 0, step = 0.1),
-							 			DT::dataTableOutput("ab_table_detail", width = "100%", height = 500))
-							 )
-			), #---------------------------------------------------------------
+							 	box(
+							 		width = 6,
+							 		status = "warning",
+							 		solidHeader = FALSE,
+							 		collapsible = TRUE,
+							 		collapsed = FALSE,
+							 		title = "Bracken results per sample",
+							 		sliderInput(
+							 			"topn",
+							 			"Top N species to show",
+							 			value = 3,
+							 			min = 1,
+							 			max = 5,
+							 			step = 1
+							 		),
+							 		DT::dataTableOutput("ab_table", width = "100%", height = 500)
+							 	),
+							 	box(
+							 		width = 6,
+							 		status = "warning",
+							 		solidHeader = FALSE,
+							 		collapsible = TRUE,
+							 		collapsed = FALSE,
+							 		title = "Detailed bracken results",
+							 		shinyWidgets::sliderTextInput(
+							 			"filterFreq",
+							 			"Filter by abundance",
+							 			choices = c(0, 0.1, 1, 5, 10, 20),
+							 			selected = 0,
+							 			post = "%",
+							 			grid = TRUE
+							 		),
+							 		#sliderInput("filterFreq", "Filter by abundance", min = 0, max = 1, value = 0, step = 0.1),
+							 		DT::dataTableOutput("ab_table_detail", width = "100%", height = 500)
+							 	)
+							 )),
+			#---------------------------------------------------------------
 			tabPanel("Nextflow output",
-							 verbatimTextOutput("nxf_output")
-			),
+							 verbatimTextOutput("nxf_output")),
 			tabPanel("Help", includeMarkdown("README.md"))
 		)
 	)
@@ -578,7 +659,7 @@ server <- function(input, output, session) {
 	})
 	
 	taxdb_left = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id="
-	taxdb_right = "&lvl=3&lin=f&keep=1&srchmode=1&unlock"
+	taxdb_right = "&lvl=1&lin=s"
 	
 	output$ab_table_detail <- DT::renderDataTable({
 		# validate ab_table is not empty
@@ -657,6 +738,7 @@ server <- function(input, output, session) {
 			# Set up parameters to pass to Rmd document
 			params <- list(
 										 n50 = seqData$n50,
+										 statsData = statsData(),
 										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
 										 filter_used = input$filterFreq,
 										 total_barcodes = seqData$nsamples,
