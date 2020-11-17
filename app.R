@@ -209,7 +209,10 @@ ui <- dashboardPage(
 							 		downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;"),
 							 		tags$a("Only data filtered by abundance will be exported")
 							 	)
-							 ),
+							 ), 
+							 # 
+							 uiOutput(outputId = "db_used"),
+							 
 							 fluidRow(
 							 	box(
 							 		width = 6,
@@ -723,6 +726,11 @@ server <- function(input, output, session) {
 											backgroundPosition = 'right')
 	})
 	
+	output$db_used <- renderUI(HTML(paste("kraken2 database used: ", 
+																	tags$b(basename(input$kraken_db) ), 
+																	 "downloaded from", 
+																	 "<a href = 'https://benlangmead.github.io/aws-indexes/k2' target = '_blank'> Ben Langmead's index zone </a>")
+														 ))
 	#
 	# generate and download rmarkdown report ------------------------------
 	#
@@ -741,6 +749,7 @@ server <- function(input, output, session) {
 										 statsData = statsData(),
 										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
 										 filter_used = input$filterFreq,
+										 db_used = input$kraken_db,
 										 total_barcodes = seqData$nsamples,
 										 total_bases = seqData$tbases,
 										 total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),

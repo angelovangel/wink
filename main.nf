@@ -178,7 +178,7 @@ process krakenDBPrep {
     script:
     dbname = kraken_file.baseName
     """
-    mkdir -p $dbname && tar -xf $kraken_file -C $dbname
+    mkdir -p $dbname && tar -xzf $kraken_file -C $dbname
     """
 }
 

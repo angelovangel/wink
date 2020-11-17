@@ -6,6 +6,7 @@ params:
   n50: NA
   statsData: NA
   brackenData: NA
+  db_used: NA
   filter_used: NA
   total_barcodes: NA
   total_reads: NA
@@ -63,7 +64,10 @@ datatable(df, filter = 'top',
 
 <div class = "blue">
 #### Taxonomic assignments and abundance estimation per sample
-The abundance data has been filtered at **`r params$filter_used`%**.
+
+- abundance data has been filtered at **`r params$filter_used`%**
+- kraken2/bracken database used: `r basename(params$db_used)` downloaded from [Ben Langmead's index zone](https://benlangmead.github.io/aws-indexes/k2)
+
 </div>
 
 ```{r, include=TRUE, eval=TRUE, echo=FALSE}
