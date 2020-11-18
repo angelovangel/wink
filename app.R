@@ -142,7 +142,8 @@ ui <- dashboardPage(
 													"PlusPF-16 | PlusPF with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_16gb_20200919.tar.gz",
 													"PlusPFP | Standard plus protozoa, fungi & plant | 90 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_20200919.tar.gz",
 													"PlusPFP-8 | PlusPFP with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_8gb_20200919.tar.gz",
-													"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz"
+													"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz",
+													"EuPathDB48 | Eukaryotic pathogen genomes with contaminants removed | 34 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_eupathdb48_20201113.tar.gz"
 												),
 											"Minikraken indexes" = c(
 												"Minikraken v1 | Refseq: bacteria, archaea, viral | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v1_8GB_201904.tgz",

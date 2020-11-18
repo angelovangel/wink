@@ -52,7 +52,7 @@ log.info """
         -------------------------------------------
          --fastq_pass       : the folder where basecalled reads are saved during a run, must contain barcodes
          --results          : where the results will go
-         --kraken_db        : path to kraken2 database, as tgz file (ftp or absolute path)
+         --kraken_db        : path to kraken2 database, as tgz file (ftp or absolute path), no quotes
          --kraken_store     : path to permanently store the kraken2 database, will be used in subsequent runs
          --taxlevel         : taxonomic level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
          --weakmem          : do not load database in memory, use on weak machines
@@ -156,13 +156,31 @@ process watch {
     """
 }
 
+// some work to enable kraken db to be one of:
+// 1. http:// --> does not exist as a file on the file system
+// 2. downloaded tgz file --> exists and isFile() returns true (method for file obj)
+// 3. a ready to use directory --> exists and isDirectory() returns true (method for file obj)
+// 1 and 2 are covered by the db_ch_file
 
-if(params.kraken_db){
+// set a var to track if an existing dir was provided. In case it is, emit empty kraken_gz_ch (skip DBPrep)
+// and emit the directory to kraken_db_ch
+doKrakenDBPrep = true
+File kraken_dir_exists = new File("${params.kraken_db}") 
+
+if( kraken_dir_exists.isDirectory() ) {
+    println "will use existing kraken db directory"
+    doKrakenDBPrep = false
     Channel
-        .of( "${params.kraken_db}" )
-        .set { kraken_gz_ch }
+        .fromPath("${params.kraken_db}", type: 'dir')
+        .set { db_ch_dir }
+}
+
+if(!params.skip_kraken){
+    Channel
+        .fromPath( "${params.kraken_db}" )
+        .set { db_ch_file }
 } else {
-        kraken_gz_ch = Channel.empty()
+        db_ch_file = Channel.empty()
 }
 
 process krakenDBPrep {
@@ -170,8 +188,9 @@ process krakenDBPrep {
 
     when:
         !params.skip_kraken
+        doKrakenDBPrep
     input:
-        path kraken_file from kraken_gz_ch
+        path kraken_file from db_ch_file
     output:
         path "**", type: 'dir' into kraken_db_ch
 
@@ -193,9 +212,11 @@ Channel
 
 // this is now barcode, filename, file, krakendb
 // kraken_db_path solves the issue where the tar archive may be with or without a leading directory
-kraken_db_path = kraken_db_ch.flatten().last()
-kraken_ch_2 = watch_fastq_pass_2.combine(kraken_db_path)
+kraken_db_path = doKrakenDBPrep ? kraken_db_ch.flatten().last() : db_ch_dir
+kraken_ch = watch_fastq_pass_2.combine(kraken_db_path)
 //kraken_ch_2.view()
+
+//exit 1
 
 process kraken {
     //container 'aangeloo/kraken2:latest'
@@ -205,8 +226,7 @@ process kraken {
     when:
         !params.skip_kraken
     input:
-        tuple key, filename, file(fastq), file(db) from kraken_ch_2
-    
+        tuple key, filename, file(fastq), file(db) from kraken_ch
     output:
         //file("*report") // both kraken2 and the bracken-corrected reports are published and later used in pavian?
         file("*bracken.tsv")
