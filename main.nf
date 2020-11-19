@@ -12,20 +12,12 @@ if( !nextflow.version.matches('>=19.08') ) {
  */
  params.fastq_pass = "fastq_pass"
  params.results = "${workflow.launchDir}/results-wink"
- params.kraken_db = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
- params.kraken_store = "$HOME/db/kraken"
+ params.kraken_db = "" // this is a db FOLDER prepared manually, gives more flexibiliy for custom db and simplifies things
  params.weakmem = false
  params.skip_kraken = false
  params.taxlevel = "S" //level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
  params.help = false
 
-/*
-assign store dir dynamically
-*/
-kraken_dbname = file("${params.kraken_db}").getSimpleName()
-// even this method exists! getSimpleName()
-curr_kraken_store = "${params.kraken_store}/${kraken_dbname}"
-println("Will use ${curr_kraken_store} as kraken_store dir")
 
 /*
  dir to store and watch merged fastq and scratch for intermediate bracken results
@@ -52,8 +44,7 @@ log.info """
         -------------------------------------------
          --fastq_pass       : the folder where basecalled reads are saved during a run, must contain barcodes
          --results          : where the results will go
-         --kraken_db        : path to kraken2 database, as tgz file (ftp or absolute path), no quotes
-         --kraken_store     : path to permanently store the kraken2 database, will be used in subsequent runs
+         --kraken_db        : path to kraken2 database (the kraken db folder)
          --taxlevel         : taxonomic level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
          --weakmem          : do not load database in memory, use on weak machines
          --skip_kraken      : skip kraken2 classification, just run statistics
@@ -77,7 +68,6 @@ log.info """
          --fastq_pass       : ${params.fastq_pass}
          --results          : ${params.results}
          --kraken_db        : ${params.kraken_db}
-         --kraken_store     : ${params.kraken_store}
          --taxlevel         : ${params.taxlevel}
 
          Runtime data:
@@ -87,7 +77,6 @@ log.info """
          Running as user:        ${workflow.userName}
          Launch dir:             ${workflow.launchDir}
          Base dir:               ${baseDir}
-         kraken db store dir     ${curr_kraken_store}
          """
          .stripIndent()
 
@@ -156,50 +145,18 @@ process watch {
     """
 }
 
-// some work to enable kraken db to be one of:
-// 1. http:// --> does not exist as a file on the file system
-// 2. downloaded tgz file --> exists and isFile() returns true (method for file obj)
-// 3. a ready to use directory --> exists and isDirectory() returns true (method for file obj)
-// 1 and 2 are covered by the db_ch_file
 
-// set a var to track if an existing dir was provided. In case it is, emit empty kraken_gz_ch (skip DBPrep)
-// and emit the directory to kraken_db_ch
-doKrakenDBPrep = true
-File kraken_dir_exists = new File("${params.kraken_db}") 
+// kraken db is a ready to use directory -
 
-if( kraken_dir_exists.isDirectory() ) {
-    println "will use existing kraken db directory"
-    doKrakenDBPrep = false
-    Channel
-        .fromPath("${params.kraken_db}", type: 'dir')
-        .set { db_ch_dir }
-}
-
-if(!params.skip_kraken){
-    Channel
-        .fromPath( "${params.kraken_db}" )
-        .set { db_ch_file }
+if( !params.skip_kraken) {
+Channel
+    .fromPath("${params.kraken_db}", type: 'dir')
+    .ifEmpty { error "Can not find ${params.kraken_db}" }
+    .set { db_ch_dir }
 } else {
-        db_ch_file = Channel.empty()
+    db_ch_dir = Channel.empty()
 }
 
-process krakenDBPrep {
-    storeDir "${curr_kraken_store}"
-
-    when:
-        !params.skip_kraken
-        doKrakenDBPrep
-    input:
-        path kraken_file from db_ch_file
-    output:
-        path "**", type: 'dir' into kraken_db_ch
-
-    script:
-    dbname = kraken_file.baseName
-    """
-    mkdir -p $dbname && tar -xzf $kraken_file -C $dbname
-    """
-}
 
 Channel
     .watchPath("${params.fastq_pass}/**.fastq", 'create,modify')
@@ -211,12 +168,7 @@ Channel
     .set { watch_fastq_pass_2 }
 
 // this is now barcode, filename, file, krakendb
-// kraken_db_path solves the issue where the tar archive may be with or without a leading directory
-kraken_db_path = doKrakenDBPrep ? kraken_db_ch.flatten().last() : db_ch_dir
-kraken_ch = watch_fastq_pass_2.combine(kraken_db_path)
-//kraken_ch_2.view()
-
-//exit 1
+kraken_ch = watch_fastq_pass_2.combine(db_ch_dir)
 
 process kraken {
     //container 'aangeloo/kraken2:latest'

@@ -35,6 +35,9 @@ Apart from the *Bacillus* misassignments, the species profiling and the abundanc
 
 ## Install
 
+### Database
+
+Download or prepare the kraken2 database and the bracken indexes that you want to use. A very good database/index source with different combinations of RefSeq genomes is Ben Langmead's [index zone](https://benlangmead.github.io/aws-indexes/k2).
 ### nextflow part
 
 -   If you don't have nextflow:

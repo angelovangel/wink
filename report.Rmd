@@ -66,7 +66,7 @@ datatable(df, filter = 'top',
 #### Taxonomic assignments and abundance estimation per sample
 
 - abundance data has been filtered at **`r params$filter_used`%**
-- kraken2/bracken database used: `r basename(params$db_used)` downloaded from [Ben Langmead's index zone](https://benlangmead.github.io/aws-indexes/k2)
+- kraken2/bracken database used: `r basename(params$db_used)` 
 
 </div>
 

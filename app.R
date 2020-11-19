@@ -58,9 +58,16 @@ ui <- dashboardPage(
 						shinyDirButton(
 							id = "fastq_pass_folder",
 							label = "Select fastq_pass folder",
-							title = "Select the fastq_pass folder",
+							title = "Select fastq_pass folder",
 							style = "color: #3498DB;",
 							#color = "primary",
+							icon = icon("folder-open")
+						),
+						shinyDirButton(
+							id = "kraken_db_folder",
+							label = "Select kraken database folder", 
+							title = "Select kraken database folder",
+							style = "color: #3498DB;",
 							icon = icon("folder-open")
 						),
 						actionButton(
@@ -122,42 +129,6 @@ ui <- dashboardPage(
 									),
 									selected = "S"
 								)
-							),
-							column(
-								width = 6,
-								selectizeInput(
-									"kraken_db",
-									width = "100%",
-									"Kraken2/Bracken index to use",
-									choices =
-										list(
-											"Standard indexes" =
-												c(
-													"MinusB | archaea, viral, plasmid, human, UniVec_Core | 7.3 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_minusb_20200919.tar.gz",
-													"Standard | archaea, bacteria, viral, plasmid, human, UniVec_Core | 47 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_20200919.tar.gz",
-													"Standard-8 | Standard with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz",
-													"Standard-16 | Standard with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_16gb_20200919.tar.gz",
-													"PlusPF | Standard plus protozoa & fungi | 48 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_20200919.tar.gz",
-													"PlusPF-8 | PlusPF with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_8gb_20200919.tar.gz",
-													"PlusPF-16 | PlusPF with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_16gb_20200919.tar.gz",
-													"PlusPFP | Standard plus protozoa, fungi & plant | 90 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_20200919.tar.gz",
-													"PlusPFP-8 | PlusPFP with DB capped at 8 GB | 7.4 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_8gb_20200919.tar.gz",
-													"PlusPFP-16 | PlusPFP with DB capped at 16 GB | 14.9 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_pluspfp_16gb_20200919.tar.gz",
-													"EuPathDB48 | Eukaryotic pathogen genomes with contaminants removed | 34 GB" = "https://genome-idx.s3.amazonaws.com/kraken/k2_eupathdb48_20201113.tar.gz"
-												),
-											"Minikraken indexes" = c(
-												"Minikraken v1 | Refseq: bacteria, archaea, viral | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v1_8GB_201904.tgz",
-												"Minikraken v2 | Refseq: bacteria, archaea, viral, human* | 8 GB" = "https://genome-idx.s3.amazonaws.com/kraken/minikraken2_v2_8GB_201904.tgz"
-											),
-											"16S indexes" = c(
-												"Greengenes 13.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Greengenes13.5_20200326.tgz",
-												"RDP 11.5" = "https://genome-idx.s3.amazonaws.com/kraken/16S_RDP11.5_20200326.tgz",
-												"Silva 132" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva132_20200326.tgz",
-												"Silva 138" = "https://genome-idx.s3.amazonaws.com/kraken/16S_Silva138_20200326.tgz"
-											)
-										),
-									selected = "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_8gb_20200919.tar.gz"
-								)
 							)
 						),
 						tags$hr(),
@@ -212,7 +183,7 @@ ui <- dashboardPage(
 							 	)
 							 ), 
 							 # 
-							 uiOutput(outputId = "db_used"),
+							 textOutput(outputId = "db_used"),
 							 
 							 fluidRow(
 							 	box(
@@ -266,11 +237,16 @@ server <- function(input, output, session) {
 	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
 	)
 	
-	# handling of shinyFiles===================================
+	# handling of shinyFiles - fastq_pass and kraken_db===================================
 	volumes <- c(Home = fs::path_home(), getVolumes()() )
 	shinyDirChoose(input, "fastq_pass_folder", 
 								 roots = volumes, 
 								 session = session)
+	shinyDirChoose(input, "kraken_db_folder", 
+								 roots = volumes, 
+								 session = session)
+	# and render which db was used 
+	output$db_used <- renderText( paste("kraken db used: ", parseDirPath(roots = volumes, input$kraken_db_folder)) )
 	
 	# handling of shinyFiles===================================
 	
@@ -401,13 +377,24 @@ server <- function(input, output, session) {
 	
 	# Build parameters for nextflow run =========================================================
 	output$stdout <- renderPrint({
-		
+		# change buttons to reflect that folders were selected
+		if( !is.integer(input$fastq_pass_folder) ) {
+			shinyjs::html("fastq_pass_folder", "fastq folder selected")
+			shinyjs::disable("fastq_pass_folder")
+		}
+		if( !is.integer(input$kraken_db_folder) ) {
+			shinyjs::html("kraken_db_folder", "kraken database selected")
+			shinyjs::disable("kraken_db_folder")
+		}
+		#
 		# build nxf call and print to stdout
-		if (is.integer(input$fastq_pass_folder)) {
-			cat("wink command preview, select a fastq_pass folder to start\n")
+		if ( is.integer(input$fastq_pass_folder) | is.integer(input$kraken_db_folder) ) {
+			cat("wink command preview, select a fastq_pass folder and a kraken2 database folder to start\n")
+			
 		} else {
 			# hard set fastq folder
-		selectedFolder <<- parseDirPath(volumes, input$fastq_pass_folder)
+		fastq_folder <<- parseDirPath(volumes, input$fastq_pass_folder)
+		kraken_db_folder <<- parseDirPath(volumes, input$kraken_db_folder)
 		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
 		weakmem <<- ifelse(input$weakmem, "--weakmem", "")
 		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", 
@@ -415,10 +402,10 @@ server <- function(input, output, session) {
 		
 		nxf_args <<- c("run" ,
 									 "main.nf",
-									 "--fastq_pass", selectedFolder,
+									 "--fastq_pass", fastq_folder,
 									 skip_kraken,
 									 weakmem,
-									 "--kraken_db", input$kraken_db, 
+									 "--kraken_db", kraken_db_folder, 
 									 "--taxlevel", input$taxlevel,
 									 nxf_profile)
 		cat("nextflow", nxf_args)
@@ -430,8 +417,8 @@ server <- function(input, output, session) {
 	
 	# start
 	observeEvent(input$run, {
-		if(is.integer(input$fastq_pass_folder)) {
-			nx_notify_error("Select run folder first!")
+		if( is.integer(input$fastq_pass_folder) | is.integer(input$kraken_db_folder) ) {
+			nx_notify_error("Select fastq and kraken database folders first!")
 		} else {
 			nxf$pid <- sys::exec_background("nextflow", 
 																	args = nxf_args, 
@@ -727,11 +714,7 @@ server <- function(input, output, session) {
 											backgroundPosition = 'right')
 	})
 	
-	output$db_used <- renderUI(HTML(paste("kraken2 database used: ", 
-																	tags$b(basename(input$kraken_db) ), 
-																	 "downloaded from", 
-																	 "<a href = 'https://benlangmead.github.io/aws-indexes/k2' target = '_blank'> Ben Langmead's index zone </a>")
-														 ))
+	
 	#
 	# generate and download rmarkdown report ------------------------------
 	#
@@ -750,7 +733,7 @@ server <- function(input, output, session) {
 										 statsData = statsData(),
 										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
 										 filter_used = input$filterFreq,
-										 db_used = input$kraken_db,
+										 db_used = parseDirPath(roots = volumes, input$kraken_db_folder),
 										 total_barcodes = seqData$nsamples,
 										 total_bases = seqData$tbases,
 										 total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
