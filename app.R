@@ -100,20 +100,29 @@ ui <- dashboardPage(
 								checkboxInput(
 									"weakmem",
 									"Do not load kraken2 database in RAM (use on weak machines)"
-								)
+								),
+								shinyDirButton(
+									id = "results_folder",
+									label = "Select results folder",
+									title = "Select results folder, default is results-wink",
+									#style = "color: #3498DB;",
+									#color = "primary",
+									icon = icon("folder-open")
+								), 
+								tags$hr(),
 							),
 							column(
-								width = 3,
+								width = 4,
 								selectizeInput(
 									"nxf_profile",
 									"nextflow profile",
 									width = "100%",
 									choices = c("docker", "conda", "local"),
 									selected = "docker"
-								),
+								)
 							),
 							column(
-								width = 3,
+								width = 4,
 								selectizeInput(
 									"taxlevel",
 									"Taxonomic level for kraken2 abundance",
@@ -237,26 +246,6 @@ server <- function(input, output, session) {
 	nx_notify_success(paste("Hello ", Sys.getenv("LOGNAME"))
 	)
 	
-	# handling of shinyFiles - fastq_pass and kraken_db===================================
-	volumes <- c(Home = fs::path_home(), getVolumes()() )
-	shinyDirChoose(input, "fastq_pass_folder", 
-								 roots = volumes, 
-								 session = session)
-	shinyDirChoose(input, "kraken_db_folder", 
-								 roots = volumes, 
-								 session = session)
-	# and render which db was used 
-	output$db_used <- renderText( paste("kraken db used: ", parseDirPath(roots = volumes, input$kraken_db_folder)) )
-	
-	# handling of shinyFiles===================================
-	
-	headers <- c("file", "format", "type", "num_seqs", 
-							 "sum_len", "min_len", "avg_len", "max_len", 
-							 "Q1", "Q2", "Q3", "sum_gap", "N50", "Q20_perc", "Q30_perc", 
-							 "first_write", "last_write")
-	
-	# REACTIVES ------------------------------------------------------------------
-	
 	#---create and read watch file that accumulates ps monitor of the nxf process
 	nxf_logfile <- tempfile() 
 	system2( "touch", c(nxf_logfile, "&& echo 'ps monitor for the wink nextflow process' >", nxf_logfile) )
@@ -267,22 +256,54 @@ server <- function(input, output, session) {
 	system2( "touch", c(nxf_outfile, "&& echo 'wink nextflow pipeline output' >", nxf_outfile) )
 	nxf_outfile_data <- reactiveFileReader( 1000, session, nxf_outfile, readLines )
 	
+	# BEGIN handling of shinyFiles - fastq_pass, kraken_db and results===================================
+	volumes <- c(Home = fs::path_home(), getVolumes()() )
+	shinyDirChoose(input, "fastq_pass_folder", 
+								 roots = volumes, 
+								 session = session)
+	shinyDirChoose(input, "kraken_db_folder", 
+								 roots = volumes, 
+								 session = session)
+	# and render which db was used 
+	output$db_used <- renderText( paste("kraken db used: ", parseDirPath(roots = volumes, input$kraken_db_folder)) )
 	
+	#-----------------------------------------------------------------------
+	res_folder <- reactive({
+	shinyDirChoose(input, "results_folder", 
+								 roots = volumes, 
+								 session = session)
+	return( parseDirPath(volumes, input$results_folder) )
+	})
+	
+	stats_folder <- reactive({
+		file.path(res_folder(), "latest-stats")
+	})
+	bracken_folder <- reactive({
+		file.path(res_folder(), "latest-bracken")
+	})
+	# END handling of shinyFiles===================================
+	
+	headers <- c("file", "format", "type", "num_seqs", 
+							 "sum_len", "min_len", "avg_len", "max_len", 
+							 "Q1", "Q2", "Q3", "sum_gap", "N50", "Q20_perc", "Q30_perc", 
+							 "first_write", "last_write")
+	
+	# REACTIVES ------------------------------------------------------------------
 	# reactive to get actual list of stats files
+	
 	statsFiles <- reactivePoll(
 		1000, session,
 		checkFunc = function() {
-			if( file.exists("results-wink/latest-stats") ) {
-				file.info("results-wink/latest-stats")$mtime
+			if( !is.null(stats_folder() ) ) {
+				file.info( stats_folder() )$mtime
 			} else {
 				""
 			}
 		},
 		valueFunc = function() {
-			list.files("results-wink/latest-stats", pattern = "*stats.txt", full.names = TRUE)
+			list.files(stats_folder(), pattern = "*stats.txt", full.names = TRUE)
 		}
 		)
-	
 	#reactive to fread stats files
 	statsData <- reactivePoll(
 		1000, session, 
@@ -299,17 +320,18 @@ server <- function(input, output, session) {
 				
 		}
 		)
+	
 	brackenFiles <- reactivePoll(
 		1000, session, 
 		checkFunc = function() {
-			if( file.exists("results-wink/latest-bracken") ) {
-				file.info("results-wink/latest-bracken")$mtime
+			if( !is.null(bracken_folder()) ) {
+				file.info( bracken_folder() )$mtime
 			} else {
 				""
 			}
 			}, 
 		valueFunc = function() {
-			l <- list.files("results-wink/latest-bracken", pattern = "*.tsv", full.names = TRUE)
+			l <- list.files(bracken_folder(), pattern = "*.tsv", full.names = TRUE)
 			setNames(l, basename(l)) # also returns l
 		}
 	)
@@ -392,9 +414,15 @@ server <- function(input, output, session) {
 			cat("wink command preview, select a fastq_pass folder and a kraken2 database folder to start\n")
 			
 		} else {
-			# hard set fastq folder
+		# hard set fastq folder
 		fastq_folder <<- parseDirPath(volumes, input$fastq_pass_folder)
 		kraken_db_folder <<- parseDirPath(volumes, input$kraken_db_folder)
+		
+		# by default results are in the app execution directory
+		kraken_results_folder <<- case_when( is.integer(input$results_folder) ~ "--results results-wink", # or ""
+																				TRUE ~ c("--results", parseDirPath(roots = volumes, input$results_folder)) 
+																				)
+		
 		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
 		weakmem <<- ifelse(input$weakmem, "--weakmem", "")
 		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", 
@@ -403,6 +431,7 @@ server <- function(input, output, session) {
 		nxf_args <<- c("run" ,
 									 "main.nf",
 									 "--fastq_pass", fastq_folder,
+									 kraken_results_folder,
 									 skip_kraken,
 									 weakmem,
 									 "--kraken_db", kraken_db_folder, 
