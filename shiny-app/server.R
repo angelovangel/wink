@@ -1,9 +1,3 @@
-#-----------------#
-# Main WINK app
-#-----------------#
-# reactive read of stats and kraken output
-# nextflow pipeline has to be started separately in the same folder, i.e. the shiny app reads results-wink
-
 require(shiny)
 require(shinydashboard)
 require(shinyFiles)
@@ -14,230 +8,8 @@ require(data.table)
 require(DT)
 require(dplyr)
 require(sys) # https://github.com/jeroen/sys
+require(here)
 
-
-si_fmt <- function(x) { system2("bin/si-format.sh", x, stdout = TRUE) }
-
-ui <- dashboardPage(
-	title = "WINK",
-	dashboardHeader(
-		title = "WINK - What's In my Nanopore reads, with Kraken2, in real-time",
-		titleWidth = '100%',
-		dropdownMenuOutput("notificationsMenu")
-	),
-	dashboardSidebar(disable = TRUE),
-	
-	dashboardBody(
-		tags$head(tags$style(
-			HTML("
-			.yellow {
-				background-color: #F4D03F;
-				}
-			.red {
-			color: red;
-			}
-						 ")
-		)),
-		#includeCSS("custom.css"),
-		useShinyjs(),
-		#useShinyalert(),
-		use_notiflix_notify(position = "right-top", width = "380px"),
-		
-		tabsetPanel(
-			tabPanel(
-				"Sequencing overview",
-				#--------------------------------------------------------------
-				fluidRow(
-					box(
-						width = 12,
-						status = "warning",
-						solidHeader = FALSE,
-						collapsible = TRUE,
-						title = "Control panel",
-						
-						shinyDirButton(
-							id = "fastq_pass_folder",
-							label = "Select fastq_pass folder",
-							title = "Select fastq_pass folder",
-							style = "color: #3498DB;",
-							#color = "primary",
-							icon = icon("folder-open")
-						),
-						shinyDirButton(
-							id = "kraken_db_folder",
-							label = "Select kraken database folder", 
-							title = "Select kraken database folder",
-							style = "color: #3498DB;",
-							icon = icon("folder-open")
-						),
-						actionButton(
-							"reset",
-							"Reset",
-							style = "color: #3498DB;",
-							icon = icon("sync"),
-							onclick = "history.go(0);"
-						),
-						actionButton("run", "Start WINK", style = "color: #3498DB;", icon = icon("play")),
-						actionButton(
-							"stop",
-							"Stop WINK",
-							style = "color: #3498DB;",
-							icon = icon("power-off")
-						),
-						actionButton(
-							"more",
-							"More options",
-							style = "color: #3498DB;",
-							icon = icon("cog"),
-							class = "rightAlign"
-						),
-						tags$div(
-							id = "optional_inputs",
-							column(
-								width = 12,
-								#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
-								checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
-								checkboxInput(
-									"weakmem",
-									"Do not load kraken2 database in RAM (use on weak machines)"
-								),
-								shinyDirButton(
-									id = "results_folder",
-									label = "Select results folder",
-									title = "Select results folder, default is results-wink",
-									#style = "color: #3498DB;",
-									#color = "primary",
-									icon = icon("folder-open")
-								), 
-								tags$hr(),
-							),
-							column(
-								width = 4,
-								selectizeInput(
-									"nxf_profile",
-									"nextflow profile",
-									width = "100%",
-									choices = c("docker", "conda", "local"),
-									selected = "docker"
-								)
-							),
-							column(
-								width = 4,
-								selectizeInput(
-									"taxlevel",
-									"Taxonomic level for kraken2 abundance",
-									width = "100%",
-									choices = c(
-										"Domain" = "D",
-										"Phylum" = "P",
-										"Class" = "C",
-										"Order" = "O",
-										"Family" = "F",
-										"Genus" = "G",
-										"Species" = "S"
-									),
-									selected = "S"
-								)
-							)
-						),
-						tags$hr(),
-						column(
-							widt = 12,
-							verbatimTextOutput("stdout"),
-							verbatimTextOutput("log_output")
-						)
-					)
-				),
-				fluidRow(
-					box(
-						width = 12,
-						status = "warning",
-						solidHeader = FALSE,
-						collapsible = TRUE,
-						title = "Run statistics",
-						valueBoxOutput("nsamples", width = 3),
-						valueBoxOutput("treads", width = 2),
-						valueBoxOutput("tbases", width = 2),
-						valueBoxOutput("n50", width = 2),
-						valueBoxOutput("runtime", width = 3)
-					)
-				),
-				fluidRow(
-					box(
-						width = 12,
-						status = "warning",
-						solidHeader = FALSE,
-						collapsible = TRUE,
-						collapsed = FALSE,
-						title = "Run statistics per sample",
-						DT::dataTableOutput("stats", width = "100%", height = 500)
-					)
-				)
-			),
-			#---------------------------------------------------------------
-			tabPanel("Taxonomy and abundance", #-----------------------------
-							 fluidRow(
-							 	box(
-							 		width = 12,
-							 		status = "warning",
-							 		solidHeader = FALSE,
-							 		collapsible = TRUE,
-							 		title = "Kraken read assignment per sample",
-							 		infoBoxOutput("current_barcode", width = 3),
-							 		infoBoxOutput("all_reads", width = 3),
-							 		infoBoxOutput("ass_reads", width = 3),
-							 		infoBoxOutput("unass_reads", width = 3),
-							 		downloadButton("download_rmarkdown", "Save report", style = "color: #3498DB;"),
-							 		tags$a("Only data filtered by abundance will be exported")
-							 	)
-							 ), 
-							 # 
-							 textOutput(outputId = "db_used"),
-							 
-							 fluidRow(
-							 	box(
-							 		width = 6,
-							 		status = "warning",
-							 		solidHeader = FALSE,
-							 		collapsible = TRUE,
-							 		collapsed = FALSE,
-							 		title = "Bracken results per sample",
-							 		sliderInput(
-							 			"topn",
-							 			"Top N species to show",
-							 			value = 3,
-							 			min = 1,
-							 			max = 5,
-							 			step = 1
-							 		),
-							 		DT::dataTableOutput("ab_table", width = "100%", height = 500)
-							 	),
-							 	box(
-							 		width = 6,
-							 		status = "warning",
-							 		solidHeader = FALSE,
-							 		collapsible = TRUE,
-							 		collapsed = FALSE,
-							 		title = "Detailed bracken results",
-							 		shinyWidgets::sliderTextInput(
-							 			"filterFreq",
-							 			"Filter by abundance",
-							 			choices = c(0, 0.1, 1, 5, 10, 20),
-							 			selected = 0,
-							 			post = "%",
-							 			grid = TRUE
-							 		),
-							 		#sliderInput("filterFreq", "Filter by abundance", min = 0, max = 1, value = 0, step = 0.1),
-							 		DT::dataTableOutput("ab_table_detail", width = "100%", height = 500)
-							 	)
-							 )),
-			#---------------------------------------------------------------
-			tabPanel("Nextflow output",
-							 verbatimTextOutput("nxf_output")),
-			tabPanel("Help", includeMarkdown("README.md"))
-		)
-	)
-)
 
 server <- function(input, output, session) {
 	
@@ -269,10 +41,10 @@ server <- function(input, output, session) {
 	
 	#-----------------------------------------------------------------------
 	res_folder <- reactive({
-	shinyDirChoose(input, "results_folder", 
-								 roots = volumes, 
-								 session = session)
-	return( parseDirPath(volumes, input$results_folder) )
+		shinyDirChoose(input, "results_folder", 
+									 roots = volumes, 
+									 session = session)
+		return( parseDirPath(volumes, input$results_folder) )
 	})
 	
 	stats_folder <- reactive({
@@ -303,7 +75,7 @@ server <- function(input, output, session) {
 		valueFunc = function() {
 			list.files(stats_folder(), pattern = "*stats.txt", full.names = TRUE)
 		}
-		)
+	)
 	#reactive to fread stats files
 	statsData <- reactivePoll(
 		1000, session, 
@@ -317,9 +89,9 @@ server <- function(input, output, session) {
 			if ( any(file.exists(statsFiles() )) )
 				rbindlist( lapply(statsFiles(), fread, sep = " ", col.names = headers))
 			else setNames(data.frame(matrix(ncol = 17, nrow = 0, 0)), headers)
-				
+			
 		}
-		)
+	)
 	
 	brackenFiles <- reactivePoll(
 		1000, session, 
@@ -329,7 +101,7 @@ server <- function(input, output, session) {
 			} else {
 				""
 			}
-			}, 
+		}, 
 		valueFunc = function() {
 			l <- list.files(bracken_folder(), pattern = "*.tsv", full.names = TRUE)
 			setNames(l, basename(l)) # also returns l
@@ -343,7 +115,7 @@ server <- function(input, output, session) {
 				file.info( brackenFiles() )$mtime
 			else
 				""
-			}, 
+		}, 
 		valueFunc =  function(){
 			if ( any(file.exists(brackenFiles() )) ) {
 				
@@ -358,13 +130,13 @@ server <- function(input, output, session) {
 	# this is the summary table, one row per barcode
 	brackenDataLeft <- reactive({
 		brackenData() %>% 
-		#dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
-		#mutate(freq = round(freq, 3)) %>%
-		group_by(file) %>%
-		slice_head(n = input$topn) %>%
-		summarize( across("name", .fns = paste, collapse = " | "), 
-							 across("kraken_assigned_reads", .fns = sum, na.rm = TRUE), 
-							 .groups = "keep" )
+			#dplyr::filter(name != "unclassified") %>% # remove these here, they are used for the krakenData reactives
+			#mutate(freq = round(freq, 3)) %>%
+			group_by(file) %>%
+			slice_head(n = input$topn) %>%
+			summarize( across("name", .fns = paste, collapse = " | "), 
+								 across("kraken_assigned_reads", .fns = sum, na.rm = TRUE), 
+								 .groups = "keep" )
 	})
 	
 	# reactive vals for storing total, mapped reads, nxf process info...
@@ -391,7 +163,7 @@ server <- function(input, output, session) {
 												 "Uknown", 
 												 # shorten this?
 												 gsub(pattern = "\\s+", " ", tail(nxflog, 1)) %>% trimws() %>% strsplit(split = " ")  %>% unlist() %>% tail(1)
-												 )
+		)
 	})
 	
 	
@@ -414,30 +186,30 @@ server <- function(input, output, session) {
 			cat("wink command preview, select a fastq_pass folder and a kraken2 database folder to start\n")
 			
 		} else {
-		# hard set fastq folder
-		fastq_folder <<- parseDirPath(volumes, input$fastq_pass_folder)
-		kraken_db_folder <<- parseDirPath(volumes, input$kraken_db_folder)
-		
-		# by default results are in the app execution directory
-		kraken_results_folder <<- case_when( is.integer(input$results_folder) ~ "--results results-wink", # or ""
-																				TRUE ~ c("--results", parseDirPath(roots = volumes, input$results_folder)) 
-																				)
-		
-		skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
-		weakmem <<- ifelse(input$weakmem, "--weakmem", "")
-		nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", 
-															 TRUE ~ c("-profile", input$nxf_profile) )
-		
-		nxf_args <<- c("run" ,
-									 "main.nf",
-									 "--fastq_pass", fastq_folder,
-									 kraken_results_folder,
-									 skip_kraken,
-									 weakmem,
-									 "--kraken_db", kraken_db_folder, 
-									 "--taxlevel", input$taxlevel,
-									 nxf_profile)
-		cat("nextflow", nxf_args)
+			# hard set fastq folder
+			fastq_folder <<- parseDirPath(volumes, input$fastq_pass_folder)
+			kraken_db_folder <<- parseDirPath(volumes, input$kraken_db_folder)
+			
+			# by default results are in the app execution directory
+			wink_results_folder <<- case_when( is.integer(input$results_folder) ~ "", # defaults to launchDir/results-wink as defined in nxf pipeline
+																				 TRUE ~ c("--results", res_folder() ) 
+			)
+			
+			skip_kraken <<- ifelse(input$skip_kraken, "--skip_kraken", "") # this works because both T and F are length 1, does not work for nxf_profile
+			weakmem <<- ifelse(input$weakmem, "--weakmem", "")
+			nxf_profile <<- case_when( input$nxf_profile == "local" ~ "", 
+																 TRUE ~ c("-profile", input$nxf_profile) )
+			
+			nxf_args <<- c("run" ,
+										 "main.nf",
+										 "--fastq_pass", fastq_folder,
+										 wink_results_folder,
+										 skip_kraken,
+										 weakmem,
+										 "--kraken_db", kraken_db_folder, 
+										 "--taxlevel", input$taxlevel,
+										 nxf_profile)
+			cat("nextflow", nxf_args)
 		}
 	})
 	# Build parameters for nextflow run =========================================================
@@ -450,16 +222,16 @@ server <- function(input, output, session) {
 			nx_notify_error("Select fastq and kraken database folders first!")
 		} else {
 			nxf$pid <- sys::exec_background("nextflow", 
-																	args = nxf_args, 
-																	std_out = nxf_outfile
-																	)
+																			args = nxf_args, 
+																			std_out = nxf_outfile
+			)
 			
 			#nx_notify_success(paste("Nextflow pipeline started with pid", nxf$pid))
 			
 			nxf$watch <- sys::exec_background("bin/watch-pid.sh", 
-										 args = nxf$pid, 
-										 std_out = nxf_logfile
-										 )
+																				args = nxf$pid, 
+																				std_out = nxf_logfile
+			)
 			
 			shinyjs::enable("stop")
 			shinyjs::disable(id = "run")
@@ -468,7 +240,7 @@ server <- function(input, output, session) {
 			shinyjs::html(selector = ".logo", 
 										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running with pid ", 
 																 nxf$pid, "</p>")
-										)
+			)
 		}
 	})
 	
@@ -502,10 +274,10 @@ server <- function(input, output, session) {
 	
 	# ------------------------------------------------------------------
 	
-	 output$log_output <- renderPrint({
-	 	cat({ nxf_logfile_data() %>% tail(2)}, sep = "\n" )
-	 	#cat(file = stderr(), "nxf_status: ", nxf$status, "\n")
-	 	})
+	output$log_output <- renderPrint({
+		cat({ nxf_logfile_data() %>% tail(2)}, sep = "\n" )
+		#cat(file = stderr(), "nxf_status: ", nxf$status, "\n")
+	})
 	
 	output$nxf_output <- renderPrint({
 		cat(nxf_outfile_data(), sep = "\n")
@@ -520,32 +292,32 @@ server <- function(input, output, session) {
 										bases_h = si_fmt(bases)) %>%
 			dplyr::select(file, num_seqs, bases, bases_h, max_len, N50, Q20_perc, last_write)
 		
-			datatable(df, filter = 'top',
-								extensions = 'Buttons', 
-								options = list(dom = 'Btp', 
-															 buttons = c('copy', 'csv', 'excel')
-															 ), 
-								rownames = FALSE, class = 'hover row-border') %>%
-				DT::formatStyle('num_seqs',
-												background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
-												backgroundSize = '95% 70%',
-												backgroundRepeat = 'no-repeat',
-												backgroundPosition = 'right') %>%
-				DT::formatStyle('bases',
-												background = styleColorBar(c(0, max(df$bases)), 'skyblue'),
-												backgroundSize = '95% 70%',
-												backgroundRepeat = 'no-repeat',
-												backgroundPosition = 'right') %>%
-				DT::formatStyle('max_len',
-												background = styleColorBar(c(0, max(df$max_len)), 'skyblue'),
-												backgroundSize = '95% 70%',
-												backgroundRepeat = 'no-repeat',
-												backgroundPosition = 'right') %>%
-				DT::formatStyle('N50',
-												background = styleColorBar(c(0, max(df$N50)), 'skyblue'),
-												backgroundSize = '95% 70%',
-												backgroundRepeat = 'no-repeat',
-												backgroundPosition = 'right') 
+		datatable(df, filter = 'top',
+							extensions = 'Buttons', 
+							options = list(dom = 'Btp', 
+														 buttons = c('copy', 'csv', 'excel')
+							), 
+							rownames = FALSE, class = 'hover row-border') %>%
+			DT::formatStyle('num_seqs',
+											background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+			DT::formatStyle('bases',
+											background = styleColorBar(c(0, max(df$bases)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+			DT::formatStyle('max_len',
+											background = styleColorBar(c(0, max(df$max_len)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+			DT::formatStyle('N50',
+											background = styleColorBar(c(0, max(df$N50)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') 
 	})
 	
 	output$nsamples <- renderValueBox({
@@ -592,11 +364,11 @@ server <- function(input, output, session) {
 	
 	output$current_barcode <- renderInfoBox({
 		infoBox(
-			 value = ifelse(is.null(last_selection$row_value), 
-			 							 "Select a sample", 
-			 							 last_selection$row_value
-			 							 ),
-			 title = "Sample", 
+			value = ifelse(is.null(last_selection$row_value), 
+										 "Select a sample", 
+										 last_selection$row_value
+			),
+			title = "Sample", 
 			icon = icon("vial"),
 			color = 'light-blue'
 		)
@@ -619,11 +391,11 @@ server <- function(input, output, session) {
 			value = ifelse(is.null(last_selection$row_value), 
 										 0, 
 										 paste(krakenData$assigned_reads, 
-										"(", 
-										round(krakenData$assigned_reads/krakenData$all_reads * 100, 0),
-										"%)"
-										)
-							),
+										 			"(", 
+										 			round(krakenData$assigned_reads/krakenData$all_reads * 100, 0),
+										 			"%)"
+										 )
+			),
 			title = "Assigned reads", 
 			subtitle = last_selection$row_value,
 			icon = icon("database"),
@@ -633,18 +405,18 @@ server <- function(input, output, session) {
 	
 	output$unass_reads <- renderInfoBox({
 		infoBox(
-				value = ifelse(is.null(last_selection$row_value), 
-											 0, 
-											 paste(krakenData$unassigned_reads, 
-											 			"(", 
-											 			round(krakenData$unassigned_reads/krakenData$all_reads * 100, 0),
-											 			"%)"
-											 )
-				),
-				title = "Unassigned reads",
-				subtitle = last_selection$row_value,
-				icon = icon("question"),
-				color = 'light-blue'
+			value = ifelse(is.null(last_selection$row_value), 
+										 0, 
+										 paste(krakenData$unassigned_reads, 
+										 			"(", 
+										 			round(krakenData$unassigned_reads/krakenData$all_reads * 100, 0),
+										 			"%)"
+										 )
+			),
+			title = "Unassigned reads",
+			subtitle = last_selection$row_value,
+			icon = icon("question"),
+			color = 'light-blue'
 		)
 	})
 	
@@ -697,10 +469,10 @@ server <- function(input, output, session) {
 				kraken_reads = kraken_assigned_reads,
 				bracken_corr_reads = new_est_reads, 
 				bracken_freq = round(freq*100, 2)
-				) %>% 
+			) %>% 
 			dplyr::mutate(
 				taxonomyID = paste0("<a target = '_blank' href='", taxonomyID, "'>", taxonomy_id, "</a>")
-				) %>%
+			) %>%
 			
 			dplyr::select(name, taxonomyID, kraken_reads, bracken_corr_reads, bracken_freq) %>%
 			dplyr::filter(bracken_freq >= input$filterFreq)
@@ -726,17 +498,17 @@ server <- function(input, output, session) {
 																 buttons = c('copy', 'csv', 'excel')
 									), 
 									rownames = FALSE, class = 'hover row-border') %>%
-		DT::formatStyle('bracken_freq',
-										background = styleColorBar(c(0, 100), 'skyblue'),
-										backgroundSize = '95% 70%',
-										backgroundRepeat = 'no-repeat',
-										backgroundPosition = 'right') %>%
-		DT::formatStyle('bracken_corr_reads',
+			DT::formatStyle('bracken_freq',
+											background = styleColorBar(c(0, 100), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+			DT::formatStyle('bracken_corr_reads',
 											background = styleColorBar(c(0, max(df_assigned$bracken_corr_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
 											backgroundPosition = 'right') %>%
-		DT::formatStyle('kraken_reads',
+			DT::formatStyle('kraken_reads',
 											background = styleColorBar(c(0,max(df_assigned$kraken_reads, na.rm = T)), 'skyblue'),
 											backgroundSize = '95% 70%',
 											backgroundRepeat = 'no-repeat',
@@ -758,17 +530,17 @@ server <- function(input, output, session) {
 			
 			# Set up parameters to pass to Rmd document
 			params <- list(
-										 n50 = seqData$n50,
-										 statsData = statsData(),
-										 brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
-										 filter_used = input$filterFreq,
-										 db_used = parseDirPath(roots = volumes, input$kraken_db_folder),
-										 total_barcodes = seqData$nsamples,
-										 total_bases = seqData$tbases,
-										 total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
-										 ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
-										 run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
-										 )
+				n50 = seqData$n50,
+				statsData = statsData(),
+				brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq/100), #filtered data goes in the report, here it is still as fraction!!
+				filter_used = input$filterFreq,
+				db_used = parseDirPath(roots = volumes, input$kraken_db_folder),
+				total_barcodes = seqData$nsamples,
+				total_bases = seqData$tbases,
+				total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
+				ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
+				run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
+			)
 			
 			# Knit the document, passing in the `params` list, and eval it in a
 			# child of the global environment (this isolates the code in the document
@@ -791,4 +563,3 @@ server <- function(input, output, session) {
 	})
 	
 }
-shiny::shinyApp(ui, server)
