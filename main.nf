@@ -114,9 +114,10 @@ Channel
     .set { watch_fastq_pass }
 
 process watch {
-    //nothing to publish, this ends here
+    //
     publishDir "${params.results}/latest-stats", mode: 'copy', overwrite: true, pattern: '*stats.txt'
     tag "new reads detected: ${x}"
+    containerOptions "--volume '${latestfastqdir}:${latestfastqdir}'"
 
     // flatten is used as it emits each file as a single item (does not wait), try collate here?
     input:
@@ -128,6 +129,7 @@ process watch {
     """
     # this is executed for each new bunch of reads, leads to blowing up the storage! 
     # so cat directly to latestfastqdir
+    # BUT latestfastqdir has to be mounted in docker explicitly!
 
     # make sure the files are cat in the right order
     find -L ${x} -type f -name '*.fastq' | sort -V | xargs cat > $latestfastqdir/${x}.fastq
