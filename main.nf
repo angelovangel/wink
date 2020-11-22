@@ -239,5 +239,4 @@ process combine {
     """
     bracken-combine.R ${barcodedir} ${barcode}-bracken.tsv
     """
-
 }

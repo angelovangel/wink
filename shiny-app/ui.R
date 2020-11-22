@@ -50,6 +50,14 @@ ui <- dashboardPage(
 							style = "color: #3498DB;",
 							icon = icon("folder-open")
 						),
+						shinyDirButton(
+							id = "results_folder",
+							label = "Select results folder",
+							title = "Select results folder, default is results-wink",
+							style = "color: #3498DB;",
+							#color = "primary",
+							icon = icon("folder-open")
+						), 
 						actionButton(
 							"reset",
 							"Reset",
@@ -71,6 +79,15 @@ ui <- dashboardPage(
 							icon = icon("cog"),
 							class = "rightAlign"
 						),
+						tags$hr(),
+						column(
+							width = 12,
+							htmlOutput("fastq_folder_selected"),
+							htmlOutput("kraken_db_selected"),
+							htmlOutput("results_folder_selected"),
+							tags$hr()
+						),
+						
 						tags$div(
 							id = "optional_inputs",
 							column(
@@ -80,16 +97,7 @@ ui <- dashboardPage(
 								checkboxInput(
 									"weakmem",
 									"Do not load kraken2 database in RAM (use on weak machines)"
-								),
-								shinyDirButton(
-									id = "results_folder",
-									label = "Select results folder",
-									title = "Select results folder, default is results-wink",
-									#style = "color: #3498DB;",
-									#color = "primary",
-									icon = icon("folder-open")
-								), 
-								tags$hr(),
+								)
 							),
 							column(
 								width = 4,
@@ -172,7 +180,7 @@ ui <- dashboardPage(
 							 	)
 							 ), 
 							 # 
-							 textOutput(outputId = "db_used"),
+							 htmlOutput(outputId = "db_used"),
 							 
 							 fluidRow(
 							 	box(

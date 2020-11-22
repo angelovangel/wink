@@ -1,14 +1,3 @@
-require(shiny)
-require(shinydashboard)
-require(shinyFiles)
-require(shinypop) # remotes::install_github("dreamRs/shinypop")
-require(shinyjs)
-require(rmarkdown)
-require(data.table)
-require(DT)
-require(dplyr)
-require(sys) # https://github.com/jeroen/sys
-require(here)
 
 
 server <- function(input, output, session) {
@@ -33,26 +22,32 @@ server <- function(input, output, session) {
 	shinyDirChoose(input, "fastq_pass_folder", 
 								 roots = volumes, 
 								 session = session)
+	
 	shinyDirChoose(input, "kraken_db_folder", 
 								 roots = volumes, 
 								 session = session)
-	# and render which db was used 
-	output$db_used <- renderText( paste("kraken db used: ", parseDirPath(roots = volumes, input$kraken_db_folder)) )
 	
-	#-----------------------------------------------------------------------
 	res_folder <- reactive({
 		shinyDirChoose(input, "results_folder", 
 									 roots = volumes, 
 									 session = session)
 		return( parseDirPath(volumes, input$results_folder) )
 	})
+	# and render what has been selected
+	output$fastq_folder_selected <- renderText(paste("<b>Selected fastq folder: </b>", parseDirPath(volumes, input$fastq_pass_folder)))
+	output$kraken_db_selected <- renderText( paste("<b>Selected kraken db folder: </b>", parseDirPath(roots = volumes, input$kraken_db_folder)) )
+	output$results_folder_selected <- renderText(paste( "<b>Selected results folder: </b>", res_folder() ))
+	output$db_used <- renderText( paste("<b>kraken db used: </b>", parseDirPath(roots = volumes, input$kraken_db_folder)) )
 	
+	#-----------------------------------------------------------------------
 	stats_folder <- reactive({
-		file.path(res_folder(), "latest-stats")
+		file.path(res_folder(), "latest-stats") 
 	})
+	
 	bracken_folder <- reactive({
 		file.path(res_folder(), "latest-bracken")
 	})
+	#
 	# END handling of shinyFiles===================================
 	
 	headers <- c("file", "format", "type", "num_seqs", 
@@ -171,27 +166,21 @@ server <- function(input, output, session) {
 	
 	# Build parameters for nextflow run =========================================================
 	output$stdout <- renderPrint({
-		# change buttons to reflect that folders were selected
-		if( !is.integer(input$fastq_pass_folder) ) {
-			shinyjs::html("fastq_pass_folder", "fastq folder selected")
-			shinyjs::disable("fastq_pass_folder")
-		}
-		if( !is.integer(input$kraken_db_folder) ) {
-			shinyjs::html("kraken_db_folder", "kraken database selected")
-			shinyjs::disable("kraken_db_folder")
-		}
-		#
 		# build nxf call and print to stdout
-		if ( is.integer(input$fastq_pass_folder) | is.integer(input$kraken_db_folder) ) {
+		# force all three folders to be defined before allowing run
+		any_notselected <- any(is.integer(input$fastq_pass_folder), is.integer(input$kraken_db_folder), is.integer(input$results_folder))
+		if (any_notselected) {
 			cat("wink command preview, select a fastq_pass folder and a kraken2 database folder to start\n")
+			shinyjs::disable("run")
 			
 		} else {
+			shinyjs::enable("run")
 			# hard set fastq folder
 			fastq_folder <<- parseDirPath(volumes, input$fastq_pass_folder)
 			kraken_db_folder <<- parseDirPath(volumes, input$kraken_db_folder)
 			
 			# by default results are in the app execution directory
-			wink_results_folder <<- case_when( is.integer(input$results_folder) ~ "", # defaults to launchDir/results-wink as defined in nxf pipeline
+			wink_results_folder <<- case_when( is.integer(input$results_folder) ~ c("--results", here("results-wink")), # 
 																				 TRUE ~ c("--results", res_folder() ) 
 			)
 			
@@ -201,7 +190,7 @@ server <- function(input, output, session) {
 																 TRUE ~ c("-profile", input$nxf_profile) )
 			
 			nxf_args <<- c("run" ,
-										 "main.nf",
+										 here("main.nf"),
 										 "--fastq_pass", fastq_folder,
 										 wink_results_folder,
 										 skip_kraken,
@@ -218,17 +207,12 @@ server <- function(input, output, session) {
 	
 	# start
 	observeEvent(input$run, {
-		if( is.integer(input$fastq_pass_folder) | is.integer(input$kraken_db_folder) ) {
-			nx_notify_error("Select fastq and kraken database folders first!")
-		} else {
 			nxf$pid <- sys::exec_background("nextflow", 
 																			args = nxf_args, 
 																			std_out = nxf_outfile
 			)
-			
 			#nx_notify_success(paste("Nextflow pipeline started with pid", nxf$pid))
-			
-			nxf$watch <- sys::exec_background("bin/watch-pid.sh", 
+			nxf$watch <- sys::exec_background(here("bin/watch-pid.sh"), 
 																				args = nxf$pid, 
 																				std_out = nxf_logfile
 			)
@@ -241,7 +225,7 @@ server <- function(input, output, session) {
 										html = paste("<p style='background-color:#E67E22;'>Nextflow pipeline running with pid ", 
 																 nxf$pid, "</p>")
 			)
-		}
+		
 	})
 	
 	# stop app if the nxf process fails
@@ -284,7 +268,7 @@ server <- function(input, output, session) {
 		#runjs("document.getElementById('nxf_output').scrollTo(0,1e9);") # scroll the page to bottom with each message, 1e9 is just a big number
 	})
 	
-	# value boxes outputs for stats tab--------------------------
+	# OUTPUTS FOR STATS TAB--------------------------
 	output$stats <- DT::renderDataTable({
 		df <- statsData() %>% 
 			dplyr::mutate(file = basename(tools::file_path_sans_ext(file)),
@@ -298,11 +282,12 @@ server <- function(input, output, session) {
 														 buttons = c('copy', 'csv', 'excel')
 							), 
 							rownames = FALSE, class = 'hover row-border') %>%
-			DT::formatStyle('num_seqs',
-											background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
-											backgroundSize = '95% 70%',
-											backgroundRepeat = 'no-repeat',
-											backgroundPosition = 'right') %>%
+			
+			 DT::formatStyle('num_seqs',
+			 								background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
+			 								backgroundSize = '95% 70%',
+			 								backgroundRepeat = 'no-repeat',
+			 								backgroundPosition = 'right') %>%
 			DT::formatStyle('bases',
 											background = styleColorBar(c(0, max(df$bases)), 'skyblue'),
 											backgroundSize = '95% 70%',
@@ -360,7 +345,7 @@ server <- function(input, output, session) {
 		)
 	})
 	
-	# value boxes outputs for kraken tab---------------------------
+	# OUTPUTS FOR KRAKEN TAB---------------------------
 	
 	output$current_barcode <- renderInfoBox({
 		infoBox(
