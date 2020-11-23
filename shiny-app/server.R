@@ -168,11 +168,9 @@ server <- function(input, output, session) {
 	output$stdout <- renderPrint({
 		# build nxf call and print to stdout
 		# force all three folders to be defined before allowing run
-		any_notselected <- any(is.integer(input$fastq_pass_folder), is.integer(input$kraken_db_folder), is.integer(input$results_folder))
-		if (any_notselected) {
+		if ( any(is.integer(input$fastq_pass_folder), is.integer(input$kraken_db_folder), is.integer(input$results_folder)) ) {
 			cat("wink command preview, select a fastq_pass folder and a kraken2 database folder to start\n")
 			shinyjs::disable("run")
-			
 		} else {
 			shinyjs::enable("run")
 			# hard set fastq folder
