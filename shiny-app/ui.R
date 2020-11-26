@@ -21,7 +21,7 @@ ui <- dashboardPage(
 		#includeCSS("custom.css"),
 		useShinyjs(),
 		#useShinyalert(),
-		use_notiflix_notify(position = "right-top", width = "380px"),
+		use_notiflix_notify(position = "right-top", width = "480px", timeout = 4000),
 		
 		tabsetPanel(
 			tabPanel(
@@ -95,7 +95,7 @@ ui <- dashboardPage(
 								#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
 								checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
 								checkboxInput("weakmem","Do not load kraken2 database in RAM (use on weak machines)"),
-								checkboxInput("autoreport", "Auto-generate report every 20 min?", value = FALSE)
+								checkboxInput("autoreport", "Generate and save report every 15 min?", value = FALSE)
 							),
 							column(
 								width = 4,

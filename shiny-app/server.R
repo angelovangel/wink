@@ -504,7 +504,7 @@ server <- function(input, output, session) {
 	#
 	output$download_rmarkdown <- downloadHandler(
 		
-		filename = "wink-report.html",
+		filename = paste0("wink-report-", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html"),
 		content = function(file) {
 			# Copy the report file to a temporary directory before processing it, in
 			# case we don't have write permissions to the current working dir 
@@ -541,8 +541,8 @@ server <- function(input, output, session) {
 	# auto-generate report?
 	
 	observe({
-		invalidateLater(1200000, session) # 20*60*1000 msec
-		reportname <- paste0("wink-report-", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html")
+		invalidateLater(90000, session) # 15*60*1000 msec
+		reportname <- paste0("wink-autoreport-", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html")
 		tempReport <- file.path(tempdir(), "report.Rmd")
 		file.copy("report.Rmd", tempReport, overwrite = TRUE)
 		
@@ -561,16 +561,19 @@ server <- function(input, output, session) {
 				run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
 			)
 		)
-		if(input$autoreport) {
-		rmarkdown::render(tempReport, 
+		# generate report only if checkbox and results folder is selected
+		if( input$autoreport & !is.integer(input$results_folder) ) {
+			rmarkdown::render(tempReport, 
 											output_file = reportname,
 											output_dir = file.path(getwd(), "auto-reports"),
 											params = params,
 											envir = new.env(parent = globalenv())
 		)
+			print( paste("auto report generated on ", Sys.time()) )
+			nx_notify_success("Report saved!")
 		}
 		
-		print( paste("auto report generated on ", Sys.time()) )
+		
 	})
 	# end auto-generate report
 

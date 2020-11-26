@@ -58,7 +58,22 @@ datatable(df, filter = 'top',
 															 buttons = c('copy', 'csv', 'excel')
 															 ), 
 					rownames = FALSE, 
-					class = 'hover row-border')
+					class = 'hover row-border') %>%
+	DT::formatStyle('num_seqs',
+			 								background = styleColorBar(c(0, max(df$num_seqs)), 'skyblue'),
+			 								backgroundSize = '95% 70%',
+			 								backgroundRepeat = 'no-repeat',
+			 								backgroundPosition = 'right') %>%
+	DT::formatStyle('bases',
+											background = styleColorBar(c(0, max(df$bases)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') %>%
+	DT::formatStyle('N50',
+											background = styleColorBar(c(0, max(df$N50)), 'skyblue'),
+											backgroundSize = '95% 70%',
+											backgroundRepeat = 'no-repeat',
+											backgroundPosition = 'right') 
 
 ```
 
