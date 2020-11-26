@@ -4,7 +4,7 @@
 # timestamps in nanopore fastq are:
 # start_time=2020-09-23T14:20:24Z
 
-# input: pass (1) minutes [integer] and 1 or more fastq file (path) and as args
+# input: pass (1) minutes [integer] and 1 or more fastq file (path) as args
 # output: write reads that are between min (start time) and minutes to a new file
 
 # algorithm:

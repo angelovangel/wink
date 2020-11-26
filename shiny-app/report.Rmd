@@ -101,6 +101,7 @@ datatable(
   							 buttons = c('copy', 'csv', 'excel'),
   							 searchPanes = list(cascadePanes = TRUE),
   							 columnDefs = list(
+  							 	# force search panes to col 1 and 2 only
   							 	list(
   							 		searchPanes = list(show = TRUE), targets = 0:1
   							 		),

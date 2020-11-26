@@ -7,3 +7,4 @@ work*
 *.fastq
 .Rhistory
 .Rproj.user
+shiny-app/auto-reports*

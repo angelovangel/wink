@@ -94,10 +94,8 @@ ui <- dashboardPage(
 								width = 12,
 								#checkboxInput("testrun", "Simulate run with test data", width = "100%"),
 								checkboxInput("skip_kraken", "Skip kraken2, show only run statistics", width = "100%"),
-								checkboxInput(
-									"weakmem",
-									"Do not load kraken2 database in RAM (use on weak machines)"
-								)
+								checkboxInput("weakmem","Do not load kraken2 database in RAM (use on weak machines)"),
+								checkboxInput("autoreport", "Auto-generate report every 20 min?", value = FALSE)
 							),
 							column(
 								width = 4,

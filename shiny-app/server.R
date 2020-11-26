@@ -504,7 +504,7 @@ server <- function(input, output, session) {
 	#
 	output$download_rmarkdown <- downloadHandler(
 		
-		filename = "report.html",
+		filename = "wink-report.html",
 		content = function(file) {
 			# Copy the report file to a temporary directory before processing it, in
 			# case we don't have write permissions to the current working dir 
@@ -538,6 +538,42 @@ server <- function(input, output, session) {
 	# generate and download rmarkdown report ------------------------------
 	#
 	
+	# auto-generate report?
+	
+	observe({
+		invalidateLater(1200000, session) # 20*60*1000 msec
+		reportname <- paste0("wink-report-", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html")
+		tempReport <- file.path(tempdir(), "report.Rmd")
+		file.copy("report.Rmd", tempReport, overwrite = TRUE)
+		
+		# Set up parameters to pass to Rmd document
+		isolate(
+			params <- list(
+				n50 = seqData$n50,
+				statsData = statsData(),
+				brackenData = brackenData() %>% dplyr::filter(freq >= input$filterFreq /100), #filtered data goes in the report, here it is still as fraction!!
+				filter_used =  input$filterFreq,
+				db_used = parseDirPath(roots = volumes, input$kraken_db_folder),
+				total_barcodes = seqData$nsamples,
+				total_bases = seqData$tbases,
+				total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
+				ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
+				run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
+			)
+		)
+		if(input$autoreport) {
+		rmarkdown::render(tempReport, 
+											output_file = reportname,
+											output_dir = file.path(getwd(), "auto-reports"),
+											params = params,
+											envir = new.env(parent = globalenv())
+		)
+		}
+		
+		print( paste("auto report generated on ", Sys.time()) )
+	})
+	# end auto-generate report
+
 	session$onSessionEnded(function() {
 		isolate( tools::pskill(nxf$watch) )
 		unlink(nxf_logfile)
