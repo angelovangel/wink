@@ -94,7 +94,7 @@ process touch {
         file x from fastq_ch.collect()
     script:
     """
-    touch \$(realpath $x)
+    touch -m -c \$(realpath $x)
     """
 }
 
