@@ -90,6 +90,8 @@ log.info """
     .set { fastq_ch }
 
 process touch {
+    errorStrategy 'ignore' //not so critical anyway, and might fail if not enough permissions
+
     input:
         file x from fastq_ch.collect()
     script:
