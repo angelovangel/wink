@@ -5,6 +5,7 @@ require(shinypop) # remotes::install_github("dreamRs/shinypop")
 require(shinyjs)
 require(rmarkdown)
 require(data.table)
+require(bit64)
 require(DT)
 require(dplyr)
 require(sys) # https://github.com/jeroen/sys

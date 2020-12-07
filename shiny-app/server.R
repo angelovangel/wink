@@ -149,8 +149,8 @@ server <- function(input, output, session) {
 	
 	observe({
 		seqData$nsamples <- nrow( statsData() )
-		seqData$treads <- si_fmt( sum(statsData()$num_seqs, na.rm = TRUE) )
-		seqData$tbases <- si_fmt( sum(statsData()$sum_len, na.rm = TRUE) )
+		seqData$treads <- si_fmt( as.character(sum(statsData()$num_seqs, na.rm = TRUE)) )
+		seqData$tbases <- si_fmt( as.character(sum(statsData()$sum_len, na.rm = TRUE)) )
 		seqData$n50 <-  mean(statsData()$N50, na.rm = TRUE) 
 		seqData$runtime <- difftime( max(statsData()$last_write), min(statsData()$first_write) ) # use asPOSIXct here!
 		nxflog <- nxf_logfile_data()
@@ -271,7 +271,7 @@ server <- function(input, output, session) {
 		df <- statsData() %>% 
 			dplyr::mutate(file = basename(tools::file_path_sans_ext(file)),
 										bases = sum_len,
-										bases_h = si_fmt(bases)) %>%
+										bases_h = si_fmt( as.character(bases)) ) %>% # issues with bit64 integers? integer64-> as.character -> si_fmt works
 			dplyr::select(file, num_seqs, bases, bases_h, max_len, N50, Q20_perc, last_write)
 		
 		datatable(df, filter = 'top',
@@ -521,7 +521,7 @@ server <- function(input, output, session) {
 				total_barcodes = seqData$nsamples,
 				total_bases = seqData$tbases,
 				total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
-				ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
+				ass_reads = si_fmt( as.character(sum( brackenData()$kraken_assigned_reads, na.rm = T)) ),
 				run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
 			)
 			
@@ -557,7 +557,7 @@ server <- function(input, output, session) {
 				total_barcodes = seqData$nsamples,
 				total_bases = seqData$tbases,
 				total_reads = seqData$treads, # sum( statsData()$num_seqs, na.rm = T),
-				ass_reads = si_fmt( sum( brackenData()$kraken_assigned_reads, na.rm = T) ),
+				ass_reads = si_fmt( as.character(sum( brackenData()$kraken_assigned_reads, na.rm = T)) ),
 				run_time = paste( round(as.numeric(seqData$runtime, units = 'hours'), digits = 2), "hours" )
 			)
 		)
