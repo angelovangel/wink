@@ -15,6 +15,7 @@ if( !nextflow.version.matches('>=19.08') ) {
  params.kraken_db = "" // this is a db FOLDER prepared manually, gives more flexibiliy for custom db and simplifies things
  params.weakmem = false
  params.skip_kraken = false
+ params.skip_touch = false
  params.taxlevel = "S" //level to estimate abundance at [options: D,P,C,O,F,G,S] (default: S)
  params.help = false
 
@@ -91,6 +92,8 @@ log.info """
 
 process touch {
     errorStrategy 'ignore' //not so critical anyway, and might fail if not enough permissions
+    when: 
+        !params.skip_touch
 
     input:
         file x from fastq_ch.collect()
