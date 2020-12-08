@@ -28,7 +28,7 @@
    fqfile_out <- paste(
  	   paste(
  		   basename(tools::file_path_sans_ext(fq)), 
- 		   paste(mins, "min", sep = ""), 
+ 		   paste(mins, "-min", sep = ""), 
  		   sep = "-"), 
  	   "fastq",
  	   sep = ".")
