@@ -18,7 +18,10 @@ server <- function(input, output, session) {
 	nxf_outfile_data <- reactiveFileReader( 1000, session, nxf_outfile, readLines )
 	
 	# BEGIN handling of shinyFiles - fastq_pass, kraken_db and results===================================
-	volumes <- c(Home = fs::path_home(), getVolumes()() )
+	volumes <- c(Home = fs::path_home(), 
+							 wink = fs::path_real("../"), 
+							 getVolumes()() )
+	
 	shinyDirChoose(input, "fastq_pass_folder", 
 								 roots = volumes, 
 								 session = session)
