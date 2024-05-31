@@ -1,7 +1,7 @@
 # WINK
 
 **W**hat's **I**n my **N**anopore reads, with **K**raken2, in real-time
-
+## Archived, not maintained anymore
 ## Description
 
 WINK is a platform for real-time phylogenetic classification and species quantification for Nanopore sequencing data, based on [kraken2]() and [bracken](https://ccb.jhu.edu/software/bracken/). It can be used both in real-time (monitor a specified folder for new reads, e.g. `fastq_pass` and continuously update results) and post-run (collect all the reads and perform analysis).<sup>[1](#footnote1)</sup> The software consists of two parts - a nextflow pipeline (can be executed on its own) and a graphical user interface (a Shiny app) which collects the output of the nextflow pipeline and diplays it as an interactive dashboard page.
